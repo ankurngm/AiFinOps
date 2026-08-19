@@ -52,21 +52,25 @@ export class OpenRouterTransformer implements ProviderTransformer {
   constructor(private readonly config: ProviderConfig) {}
 
   buildRequest({ providerModelId, requestBody }: BuildRequestParams): OutboundRequest {
-    const apiKey = process.env[this.config.apiKeyEnvVar];
-    if (!apiKey) {
-      throw new Error(
-        `Missing API key: environment variable ${this.config.apiKeyEnvVar} is not set`,
-      );
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.config.apiKeyEnvVar) {
+      const apiKey = process.env[this.config.apiKeyEnvVar];
+      if (!apiKey) {
+        throw new Error(
+          `Missing API key: environment variable ${this.config.apiKeyEnvVar} is not set`,
+        );
+      }
+      headers.Authorization = `Bearer ${apiKey}`;
     }
 
     const { model: _originalModel, ...rest } = requestBody;
 
     return {
       url: `${this.config.baseUrl}/chat/completions`,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       body: {
         ...rest,
         model: providerModelId,

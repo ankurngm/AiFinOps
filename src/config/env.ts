@@ -8,8 +8,6 @@ const envSchema = z.object({
   PGPASSWORD: z.string().min(1, 'PGPASSWORD is required'),
   PGPORT: z.coerce.number().int().positive('PGPORT must be a positive integer'),
 
-  OPENROUTER_API_KEY: z.string().min(1, 'OPENROUTER_API_KEY is required'),
-
   PORT: z.coerce.number().int().positive('PORT must be a positive integer'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });

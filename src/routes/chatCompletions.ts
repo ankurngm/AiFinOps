@@ -65,7 +65,29 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
         .send({ error: `no transformer registered for provider: ${provider}` });
     }
 
-    const outbound = transformer.buildRequest({ providerModelId, requestBody: body });
+    const startedAt = performance.now();
+
+    let outbound;
+    try {
+      outbound = transformer.buildRequest({ providerModelId, requestBody: body });
+    } catch (err) {
+      const latencyMs = Math.round(performance.now() - startedAt);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const logEntry: RequestLogEntry = {
+        provider,
+        requestedModel: body.model,
+        resolvedModelId: providerModelId,
+        requestBody: body,
+        responseBody: null,
+        status: 'error',
+        httpStatusCode: null,
+        errorMessage,
+        ...EMPTY_USAGE,
+        latencyMs,
+      };
+      await logRequest(pool, logEntry);
+      return reply.status(500).send({ error: `provider not configured: ${errorMessage}` });
+    }
 
     const baseLogEntry = {
       provider,
@@ -73,8 +95,6 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
       resolvedModelId: providerModelId,
       requestBody: outbound.body,
     };
-
-    const startedAt = performance.now();
 
     let upstreamResponse: Response;
     try {

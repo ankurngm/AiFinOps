@@ -5,7 +5,8 @@ import { z } from 'zod';
 const providerConfigSchema = z.object({
   displayName: z.string().min(1),
   baseUrl: z.string().url(),
-  apiKeyEnvVar: z.string().min(1),
+  // Optional: keyless providers (e.g. a local Ollama endpoint) omit this
+  apiKeyEnvVar: z.string().min(1).optional(),
 });
 
 const providersSchema = z.record(z.string(), providerConfigSchema);
@@ -48,4 +49,31 @@ export const providers: ProvidersMap = loadProviders();
 
 export function getProvider(providerName: string): ProviderConfig | undefined {
   return providers[providerName];
+}
+
+export interface ProviderReadiness {
+  ready: string[];
+  notReady: string[];
+}
+
+/**
+ * Classifies every provider listed in providers.json by whether it's
+ * usable: keyless providers (no apiKeyEnvVar, e.g. a local Ollama endpoint)
+ * are always ready. Providers.json can list more providers than a given
+ * deployment uses — only the ones actually usable are "ready"; the rest are
+ * just unused catalog entries, not a boot failure.
+ */
+export function getProviderReadiness(): ProviderReadiness {
+  const ready: string[] = [];
+  const notReady: string[] = [];
+
+  for (const [name, config] of Object.entries(providers)) {
+    if (!config.apiKeyEnvVar || process.env[config.apiKeyEnvVar]) {
+      ready.push(name);
+    } else {
+      notReady.push(name);
+    }
+  }
+
+  return { ready, notReady };
 }
