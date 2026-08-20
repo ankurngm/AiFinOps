@@ -97,6 +97,8 @@ of this additive, not a rewrite.
 
 All notable changes to this project are documented here. Dates are in `YYYY-MM-DD` format.
 
+### 0.1.1 — 2026-08-19
+
 ### 0.1.0 — 2026-08-19
 
 Initial release.
@@ -113,3 +115,7 @@ Initial release.
 
 For the full technical reference — architecture diagram, request flow, environment variables,
 database schema, and how to add a new provider — see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
+## Author
+
+Created by [Ankur Nigam](https://www.linkedin.com/in/ankurnigam/).

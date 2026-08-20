@@ -1,6 +1,6 @@
 {
   "name": "aifinops",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An AI FinOps platform that gives teams visibility, control, and governance over LLM usage and cost - starting with an OpenAI-compatible gateway that validates, routes, and logs requests across LLM providers.",
   "type": "module",
   "engines": {
