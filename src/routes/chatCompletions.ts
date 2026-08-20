@@ -1,3 +1,10 @@
+/**
+ * Copyright (C) 2026 Ankur Nigam
+ * Licensed under the Elastic License 2.0, plus a supplemental attribution term.
+ * See the LICENSE file in the project root for full terms.
+ * https://github.com/ankurngm/AiFinOps
+ */
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { chatCompletionRequestSchema } from '../schemas/chatCompletionRequest.js';
 import { getProvider } from '../config/providers.js';

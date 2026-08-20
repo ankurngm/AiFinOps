@@ -1,3 +1,10 @@
+/**
+ * Copyright (C) 2026 Ankur Nigam
+ * Licensed under the Elastic License 2.0, plus a supplemental attribution term.
+ * See the LICENSE file in the project root for full terms.
+ * https://github.com/ankurngm/AiFinOps
+ */
+
 import Fastify from 'fastify';
 import { env } from './config/env.js';
 import { getProviderReadiness } from './config/providers.js';
