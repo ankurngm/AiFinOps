@@ -104,6 +104,9 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
   it as a hosted/managed service to third parties, and (b) redistributing without a visible
   attribution link back to the original repository.
 - Added a license header to every source file (`src/`, `scripts/`, `eslint.config.js`).
+- Added a `GET /health` endpoint — reports overall status, app version, uptime, Postgres
+  reachability (`200`/`503`), and per-provider readiness. Safe to expose without inbound auth;
+  reports no secrets or business data.
 
 ### 0.1.0 — 2026-08-19
 

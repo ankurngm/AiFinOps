@@ -10,6 +10,7 @@ import { env } from './config/env.js';
 import { getProviderReadiness } from './config/providers.js';
 import { pool } from './db/pool.js';
 import { chatCompletionsRoute } from './routes/chatCompletions.js';
+import { healthRoute } from './routes/health.js';
 
 function logProviderReadiness(): void {
   const { ready, notReady } = getProviderReadiness();
@@ -50,6 +51,7 @@ async function main(): Promise<void> {
   });
 
   await app.register(chatCompletionsRoute);
+  await app.register(healthRoute);
 
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });
