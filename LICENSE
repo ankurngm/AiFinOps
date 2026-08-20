@@ -1,5 +1,8 @@
 Copyright (C) 2026 Ankur Nigam
 
+This software is licensed under the Elastic License 2.0, reproduced below in full, plus one
+supplemental term added by the licensor (see "Additional Terms" at the end of this file).
+
 Elastic License 2.0
 
 URL: https://www.elastic.co/licensing/elastic-license
@@ -83,3 +86,11 @@ or otherwise. Control can be direct or indirect.
 **use** means anything you do with the software requiring one of your licenses.
 
 **trademark** means trademarks, service marks, and similar rights.
+
+## Additional Terms
+
+The following term is supplemental to the Elastic License 2.0 above and is imposed by the
+licensor under its rights to license this software:
+
+**Attribution.** Any distribution of this software or a modified version of it must include a
+visible attribution link to the original repository: https://github.com/ankurngm/AiFinOps.

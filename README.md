@@ -99,9 +99,10 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
 
 ### 0.1.1 — 2026-08-19
 
-- Licensed under [Elastic License 2.0](LICENSE) — free for personal, commercial, and enterprise
-  use and modification, with a restriction on offering it as a hosted/managed service to third
-  parties.
+- Licensed under [Elastic License 2.0](LICENSE), plus a supplemental attribution term — free for
+  personal, commercial, and enterprise use and modification, with restrictions on (a) offering
+  it as a hosted/managed service to third parties, and (b) redistributing without a visible
+  attribution link back to the original repository.
 
 ### 0.1.0 — 2026-08-19
 
@@ -122,9 +123,11 @@ database schema, and how to add a new provider — see **[ARCHITECTURE.md](ARCHI
 
 ## License
 
-AiFinOps is licensed under the [Elastic License 2.0](LICENSE). You're free to use, modify, and
-redistribute it — including for commercial and enterprise purposes — with one restriction: you
-may not offer it, or a modified version of it, to third parties as a hosted or managed service.
+AiFinOps is licensed under the [Elastic License 2.0](LICENSE), plus one supplemental term. You're
+free to use, modify, and redistribute it — including for commercial and enterprise purposes —
+with two conditions: you may not offer it, or a modified version of it, to third parties as a
+hosted or managed service; and any redistribution must include a visible attribution link back
+to [github.com/ankurngm/AiFinOps](https://github.com/ankurngm/AiFinOps).
 
 ## Author
 
