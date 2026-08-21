@@ -115,6 +115,8 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
 - Added Node.js usage examples under [`examples/nodejs/`](examples/nodejs) — basic call,
   call with attribution, calling an unprovisioned model (shows the compliance gate), and using
   the official `openai` SDK against AiFinOps via `baseURL`.
+- Added curl usage examples under [`examples/curl/`](examples/curl) — basic call, call with
+  attribution, and calling an unprovisioned model (shows the compliance gate).
 
 ### 0.1.0 — 2026-08-19
 
