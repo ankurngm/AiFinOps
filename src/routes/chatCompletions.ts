@@ -13,6 +13,7 @@ import { isModelProvisioned } from '../config/providerModelMap.js';
 import { getTransformer } from '../transformers/registry.js';
 import { pool } from '../db/pool.js';
 import { logRequest, type RequestLogEntry } from '../db/logRequest.js';
+import { logAudit } from '../logging/auditLog.js';
 
 const EMPTY_USAGE = {
   promptTokens: null,
@@ -93,7 +94,9 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
     } catch (err) {
       const latencyMs = Math.round(performance.now() - startedAt);
       const errorMessage = err instanceof Error ? err.message : String(err);
+      const callerResponse = { error: `provider not configured: ${errorMessage}` };
       const logEntry: RequestLogEntry = {
+        requestId: request.id,
         provider,
         requestedModel: body.model,
         resolvedModelId: providerModelId,
@@ -107,10 +110,27 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
         latencyMs,
       };
       await logRequest(pool, logEntry);
-      return reply.status(500).send({ error: `provider not configured: ${errorMessage}` });
+      logAudit({
+        requestId: request.id,
+        provider,
+        requestedModel: body.model,
+        resolvedModelId: providerModelId,
+        status: 'error',
+        httpStatusCode: null,
+        errorMessage,
+        latencyMs,
+        attribution,
+        usage: EMPTY_USAGE,
+        callerRequest: body,
+        providerRequest: null,
+        providerResponse: null,
+        callerResponse,
+      });
+      return reply.status(500).send(callerResponse);
     }
 
     const baseLogEntry = {
+      requestId: request.id,
       provider,
       requestedModel: body.model,
       resolvedModelId: providerModelId,
@@ -128,6 +148,7 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
     } catch (err) {
       const latencyMs = Math.round(performance.now() - startedAt);
       const errorMessage = err instanceof Error ? err.message : String(err);
+      const callerResponse = { error: `failed to reach provider: ${errorMessage}` };
       const logEntry: RequestLogEntry = {
         ...baseLogEntry,
         responseBody: null,
@@ -138,7 +159,23 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
         latencyMs,
       };
       await logRequest(pool, logEntry);
-      return reply.status(502).send({ error: `failed to reach provider: ${errorMessage}` });
+      logAudit({
+        requestId: request.id,
+        provider,
+        requestedModel: body.model,
+        resolvedModelId: providerModelId,
+        status: 'error',
+        httpStatusCode: null,
+        errorMessage,
+        latencyMs,
+        attribution,
+        usage: EMPTY_USAGE,
+        callerRequest: body,
+        providerRequest: outbound.body,
+        providerResponse: null,
+        callerResponse,
+      });
+      return reply.status(502).send(callerResponse);
     }
 
     const latencyMs = Math.round(performance.now() - startedAt);
@@ -166,6 +203,22 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
         latencyMs,
       };
       await logRequest(pool, logEntry);
+      logAudit({
+        requestId: request.id,
+        provider,
+        requestedModel: body.model,
+        resolvedModelId: providerModelId,
+        status: 'error',
+        httpStatusCode: upstreamResponse.status,
+        errorMessage,
+        latencyMs,
+        attribution,
+        usage: EMPTY_USAGE,
+        callerRequest: body,
+        providerRequest: outbound.body,
+        providerResponse: rawJson,
+        callerResponse: rawJson,
+      });
       return reply.status(upstreamResponse.status).send(rawJson);
     }
 
@@ -174,6 +227,7 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
       parsed = transformer.parseResponse(rawJson);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
+      const callerResponse = { error: `invalid response from provider: ${errorMessage}` };
       const logEntry: RequestLogEntry = {
         ...baseLogEntry,
         responseBody: rawJson,
@@ -184,7 +238,23 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
         latencyMs,
       };
       await logRequest(pool, logEntry);
-      return reply.status(502).send({ error: `invalid response from provider: ${errorMessage}` });
+      logAudit({
+        requestId: request.id,
+        provider,
+        requestedModel: body.model,
+        resolvedModelId: providerModelId,
+        status: 'error',
+        httpStatusCode: upstreamResponse.status,
+        errorMessage,
+        latencyMs,
+        attribution,
+        usage: EMPTY_USAGE,
+        callerRequest: body,
+        providerRequest: outbound.body,
+        providerResponse: rawJson,
+        callerResponse,
+      });
+      return reply.status(502).send(callerResponse);
     }
 
     const logEntry: RequestLogEntry = {
@@ -204,6 +274,22 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
       latencyMs,
     };
     await logRequest(pool, logEntry);
+    logAudit({
+      requestId: request.id,
+      provider,
+      requestedModel: body.model,
+      resolvedModelId: providerModelId,
+      status: 'success',
+      httpStatusCode: upstreamResponse.status,
+      errorMessage: null,
+      latencyMs,
+      attribution,
+      usage: parsed.usage,
+      callerRequest: body,
+      providerRequest: outbound.body,
+      providerResponse: parsed.body,
+      callerResponse: parsed.body,
+    });
 
     return reply.status(upstreamResponse.status).send(parsed.body);
   });

@@ -117,6 +117,13 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
   the official `openai` SDK against AiFinOps via `baseURL`.
 - Added curl usage examples under [`examples/curl/`](examples/curl) — basic call, call with
   attribution, and calling an unprovisioned model (shows the compliance gate).
+- Added optional file-based audit logging (`FILE_LOGGING_ENABLED`, off by default) — one JSON
+  line per call (caller request, what was forwarded to the provider, the provider's response,
+  and what was sent back to the caller), size-rotated via `LOG_MAX_SIZE` (default `10m`),
+  retention deliberately uncapped. Every request now gets a real UUID (`request.id`), shared
+  across Fastify's own logs, the audit log file, and a new `request_id` column in Postgres, so
+  any of the three can be used to find the others. Postgres logging is unaffected either way.
+  See [ARCHITECTURE.md](ARCHITECTURE.md#file-based-audit-logging) for the full design.
 
 ### 0.1.0 — 2026-08-19
 

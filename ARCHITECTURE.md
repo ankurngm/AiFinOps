@@ -83,6 +83,8 @@ src/
   db/
     pool.ts                    pg Pool, built from PG* env vars
     logRequest.ts               insert one row per request/response
+  logging/
+    auditLog.ts                 optional file-based audit log (Winston, size-rotated)
   schemas/
     chatCompletionRequest.ts    Zod schema for the inbound OpenAI-shaped body
     attribution.ts               Zod schema for the optional attribution headers
@@ -95,16 +97,19 @@ scripts/
 
 ## Environment variables
 
-| Variable             | Required at boot?               | Purpose                                                                        |
-| -------------------- | ------------------------------- | ------------------------------------------------------------------------------ |
-| `PGUSER`             | Yes                             | Postgres username                                                              |
-| `PGHOST`             | Yes                             | Postgres host                                                                  |
-| `PGDATABASE`         | Yes                             | Postgres database name                                                         |
-| `PGPASSWORD`         | Yes                             | Postgres password                                                              |
-| `PGPORT`             | Yes                             | Postgres port (default `5432`)                                                 |
-| `PORT`               | Yes                             | Gateway HTTP port (default `8787`)                                             |
-| `NODE_ENV`           | Yes (defaults to `development`) | `development` \| `production` \| `test`                                        |
-| `OPENROUTER_API_KEY` | No — checked per-provider       | OpenRouter API key. Only needed if you actually call the `openrouter` provider |
+| Variable               | Required at boot?               | Purpose                                                                                       |
+| ---------------------- | ------------------------------- | --------------------------------------------------------------------------------------------- |
+| `PGUSER`               | Yes                             | Postgres username                                                                             |
+| `PGHOST`               | Yes                             | Postgres host                                                                                 |
+| `PGDATABASE`           | Yes                             | Postgres database name                                                                        |
+| `PGPASSWORD`           | Yes                             | Postgres password                                                                             |
+| `PGPORT`               | Yes                             | Postgres port (default `5432`)                                                                |
+| `PORT`                 | Yes                             | Gateway HTTP port (default `8787`)                                                            |
+| `NODE_ENV`             | Yes (defaults to `development`) | `development` \| `production` \| `test`                                                       |
+| `OPENROUTER_API_KEY`   | No — checked per-provider       | OpenRouter API key. Only needed if you actually call the `openrouter` provider                |
+| `FILE_LOGGING_ENABLED` | No (defaults to `false`)        | Turns on the file-based audit log — see [File-based audit logging](#file-based-audit-logging) |
+| `LOG_DIR`              | No (defaults to `./logs`)       | Directory the audit log file is written to (only used if enabled)                             |
+| `LOG_MAX_SIZE`         | No (defaults to `10m`)          | Rotation threshold, e.g. `10m`, `500k`, `1g` (only used if enabled)                           |
 
 `PGUSER`/`PGHOST`/`PGDATABASE`/`PGPASSWORD`/`PGPORT`/`PORT`/`NODE_ENV` are validated with Zod
 once at startup (`src/config/env.ts`). If any are missing or invalid, the process prints exactly
@@ -213,7 +218,8 @@ CREATE TABLE IF NOT EXISTS requests (
   application_id        TEXT,
   module_id             TEXT,
   process_or_user_id    TEXT,
-  transaction_id        TEXT
+  transaction_id        TEXT,
+  request_id             UUID          -- shared correlation ID with the audit log file
 );
 
 CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests (created_at);
@@ -222,6 +228,7 @@ CREATE INDEX IF NOT EXISTS idx_requests_tenant_id ON requests (tenant_id);
 CREATE INDEX IF NOT EXISTS idx_requests_application_id ON requests (application_id);
 CREATE INDEX IF NOT EXISTS idx_requests_tenant_app ON requests (tenant_id, application_id);
 CREATE INDEX IF NOT EXISTS idx_requests_transaction_id ON requests (transaction_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_request_id ON requests (request_id);
 ```
 
 `npm run setup-db` is idempotent and safe to re-run against an existing database — it also issues
@@ -290,6 +297,66 @@ up front, since they map directly to the attribution questions already in the RE
 tenant/app," "total cost of one workflow"). `region_id`/`environment`/`module_id`/
 `process_or_user_id` are left unindexed until real dashboard query patterns justify the
 write-cost of an index on every insert.
+
+## File-based audit logging
+
+Postgres (`requests` table) is the "must have" record and is always on. File-based audit
+logging is a **supplemental, opt-in** sink for enterprises that consume logs via a SIEM (Splunk,
+etc.) tailing a rotating file — off by default, controlled entirely by env vars
+(`FILE_LOGGING_ENABLED`, `LOG_DIR`, `LOG_MAX_SIZE`; see [Environment
+variables](#environment-variables)). Implementation: `src/logging/auditLog.ts`.
+
+**One JSON line per call**, not four separate lines for received/forwarded/response/returned —
+splitting those apart would force whoever's reading the file (human or SIEM correlation rule) to
+reassemble a single call from multiple physically separate lines, which gets genuinely ambiguous
+once concurrent or identical-looking calls are in the file at once. Instead, the whole lifecycle
+is one record:
+
+```json
+{
+  "requestId": "1da2db2c-ef18-44e9-89fa-8dfe2cf2b292",
+  "provider": "openrouter",
+  "requestedModel": "openrouter/openai/gpt-4o-mini",
+  "resolvedModelId": "openai/gpt-4o-mini",
+  "status": "success",
+  "httpStatusCode": 200,
+  "errorMessage": null,
+  "latencyMs": 632,
+  "attribution": { "tenantId": "tenant_enterprise_apple", "...": "..." },
+  "usage": { "promptTokens": 13, "completionTokens": 9, "cost": 0.00000735, "...": "..." },
+  "callerRequest": { "model": "openrouter/openai/gpt-4o-mini", "messages": ["..."] },
+  "providerRequest": { "model": "openai/gpt-4o-mini", "messages": ["..."] },
+  "providerResponse": { "...": "the raw response from OpenRouter" },
+  "callerResponse": { "...": "what was actually sent back to the caller" }
+}
+```
+
+`providerResponse` and `callerResponse` are identical in v1 (responses are passed through
+unmodified) but kept as distinct fields deliberately — they won't necessarily stay identical
+once response transformation, streaming, or cross-provider normalization exist, and the schema
+shouldn't need to change shape when that happens.
+
+**The shared `requestId`.** Fastify's `genReqId` is overridden in `server.ts` to generate a real
+UUID (`crypto.randomUUID()`) instead of Fastify's default per-process counter (`req-1`, `req-2`,
+...) — which isn't safe to correlate with anyway, since it resets on every restart and would
+collide across multiple gateway instances behind a load balancer. That UUID is the _same_ value
+in three places for one call: Fastify's own Pino request logs, this audit log entry, and the
+`request_id` column on the corresponding Postgres row (unique-indexed) — so any of the three can
+be used to pivot into the other two.
+
+**Rotation:** pure size-based, via Winston's built-in `File` transport `maxsize` option (not the
+`winston-daily-rotate-file` package, which bundles in date-based rotation whether you want it or
+not) — `LOG_MAX_SIZE` (default `10m`) is parsed from a human-readable size string into bytes.
+When exceeded, Winston opens a new numbered file (`aifinops-audit.log` → `aifinops-audit1.log` →
+`aifinops-audit2.log` → ...). **Retention is deliberately uncapped** — no `maxFiles` is set, so
+rotated files accumulate forever; that's a product decision, not an oversight, so plan disk
+capacity accordingly if you enable this in a long-running deployment.
+
+**Failure contract:** `logAudit()` never throws — a write failure is caught and printed to
+server logs, exactly like `logRequest()`'s contract for Postgres. Unlike the Postgres insert
+(which is `await`ed before the caller gets a response, so the row is guaranteed to exist first),
+Winston's own API is fire-and-forget from the caller's side — the write itself still happens
+asynchronously under the hood.
 
 ## Health endpoint
 

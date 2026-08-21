@@ -35,7 +35,8 @@ const CREATE_TABLE_SQL = `
     application_id        TEXT,
     module_id             TEXT,
     process_or_user_id    TEXT,
-    transaction_id        TEXT
+    transaction_id        TEXT,
+    request_id             UUID          -- shared correlation ID with the audit log file
   );
 
   -- Idempotent migration for databases created before attribution columns existed.
@@ -46,6 +47,7 @@ const CREATE_TABLE_SQL = `
   ALTER TABLE requests ADD COLUMN IF NOT EXISTS module_id TEXT;
   ALTER TABLE requests ADD COLUMN IF NOT EXISTS process_or_user_id TEXT;
   ALTER TABLE requests ADD COLUMN IF NOT EXISTS transaction_id TEXT;
+  ALTER TABLE requests ADD COLUMN IF NOT EXISTS request_id UUID;
 
   CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests (created_at);
   CREATE INDEX IF NOT EXISTS idx_requests_provider_model ON requests (provider, resolved_model_id);
@@ -53,6 +55,7 @@ const CREATE_TABLE_SQL = `
   CREATE INDEX IF NOT EXISTS idx_requests_application_id ON requests (application_id);
   CREATE INDEX IF NOT EXISTS idx_requests_tenant_app ON requests (tenant_id, application_id);
   CREATE INDEX IF NOT EXISTS idx_requests_transaction_id ON requests (transaction_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_request_id ON requests (request_id);
 `;
 
 async function main(): Promise<void> {

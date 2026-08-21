@@ -5,6 +5,7 @@
  * https://github.com/ankurngm/AiFinOps
  */
 
+import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import { env } from './config/env.js';
 import { getProviderReadiness } from './config/providers.js';
@@ -48,6 +49,10 @@ async function main(): Promise<void> {
 
   const app = Fastify({
     logger: true,
+    // A real UUID, not Fastify's default per-process counter (req-1, req-2, ...)
+    // — this same ID ties together Fastify's own logs, the audit log file,
+    // and the "request_id" column in Postgres for one call.
+    genReqId: () => randomUUID(),
   });
 
   await app.register(chatCompletionsRoute);

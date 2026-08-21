@@ -17,6 +17,16 @@ const envSchema = z.object({
 
   PORT: z.coerce.number().int().positive('PORT must be a positive integer'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+
+  // File-based audit logging is opt-in — off by default. Postgres remains
+  // the "must have" record regardless of this setting.
+  FILE_LOGGING_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .default('false')
+    .transform((v) => v === 'true'),
+  LOG_DIR: z.string().min(1).optional().default('./logs'),
+  LOG_MAX_SIZE: z.string().min(1).optional().default('10m'),
 });
 
 export type Env = z.infer<typeof envSchema>;

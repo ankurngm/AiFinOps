@@ -23,6 +23,7 @@
     "dotenv": "^16.4.5",
     "fastify": "^5.1.0",
     "pg": "^8.13.1",
+    "winston": "^3.19.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
