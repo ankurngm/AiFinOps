@@ -247,15 +247,15 @@ ORDER BY total_cost DESC;
 Optional cost-attribution metadata a caller can send alongside a request. Captured in the
 `requests` table for later filtering/dashboarding; **never forwarded to the LLM provider.**
 
-| Header                        | DB column            | Description                                 |
-| ----------------------------- | -------------------- | ------------------------------------------- |
-| `AiFinOps-Region-Id`          | `region_id`          | Geographic or cloud infrastructure zone     |
-| `AiFinOps-Environment`        | `environment`        | Deployment stage                            |
-| `AiFinOps-Tenant-Id`          | `tenant_id`          | Client or organization account              |
-| `AiFinOps-Application-Id`     | `application_id`     | Macro-level software application or service |
-| `AiFinOps-Module-Id`          | `module_id`          | Sub-system or component within the app      |
-| `AiFinOps-Process-Or-User-Id` | `process_or_user_id` | System process ID or the active user ID     |
-| `AiFinOps-Transaction-Id`     | `transaction_id`     | Unique trace ID for one request workflow    |
+| Header                        | DB column            | Description                                 | Example                                                  |
+| ----------------------------- | -------------------- | ------------------------------------------- | -------------------------------------------------------- |
+| `AiFinOps-Region-Id`          | `region_id`          | Geographic or cloud infrastructure zone     | `us-east-1`, `eu-west-2`, `local`                        |
+| `AiFinOps-Environment`        | `environment`        | Deployment stage                            | `production`, `staging`, `development`                   |
+| `AiFinOps-Tenant-Id`          | `tenant_id`          | Client or organization account              | `tenant_enterprise_apple`, `tenant_free_user_12`         |
+| `AiFinOps-Application-Id`     | `application_id`     | Macro-level software application or service | `e-commerce-api`, `customer-portal`, `analytics-worker`  |
+| `AiFinOps-Module-Id`          | `module_id`          | Sub-system or component within the app      | `auth-engine`, `payment-gateway`, `billing`, `inventory` |
+| `AiFinOps-Process-Or-User-Id` | `process_or_user_id` | System process ID or the active user ID     | `usr_98234` or `pid_4412`                                |
+| `AiFinOps-Transaction-Id`     | `transaction_id`     | Unique trace ID for one request workflow    | `tx_abc123xyz789`                                        |
 
 All optional, all free-form strings capped at 255 characters (`src/schemas/attribution.ts`); an
 oversized value is rejected with a `400` before anything else runs — no fixed vocabulary is
