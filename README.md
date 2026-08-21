@@ -112,6 +112,9 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
   `-Application-Id`, `-Module-Id`, `-Process-Or-User-Id`, `-Transaction-Id`) — captured in the
   `requests` table for future dashboard filtering, never forwarded to the LLM provider. See
   [ARCHITECTURE.md](ARCHITECTURE.md#attribution-headers) for the full field reference.
+- Added Node.js usage examples under [`examples/nodejs/`](examples/nodejs) — basic call,
+  call with attribution, calling an unprovisioned model (shows the compliance gate), and using
+  the official `openai` SDK against AiFinOps via `baseURL`.
 
 ### 0.1.0 — 2026-08-19
 

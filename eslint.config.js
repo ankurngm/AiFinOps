@@ -12,7 +12,9 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**'],
+    // examples/ are standalone demo scripts meant to be copy-paste-able and
+    // run independently — not part of the compiled/type-checked project.
+    ignores: ['dist/**', 'node_modules/**', 'examples/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
