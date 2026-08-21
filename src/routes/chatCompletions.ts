@@ -7,6 +7,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { chatCompletionRequestSchema } from '../schemas/chatCompletionRequest.js';
+import { attributionHeadersSchema, toAttribution } from '../schemas/attribution.js';
 import { getProvider } from '../config/providers.js';
 import { isModelProvisioned } from '../config/providerModelMap.js';
 import { getTransformer } from '../transformers/registry.js';
@@ -26,6 +27,18 @@ const EMPTY_USAGE = {
 
 export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> {
   app.post('/v1/chat/completions', async (request: FastifyRequest, reply: FastifyReply) => {
+    const attributionResult = attributionHeadersSchema.safeParse(request.headers);
+    if (!attributionResult.success) {
+      return reply.status(400).send({
+        error: 'invalid attribution headers',
+        details: attributionResult.error.issues.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
+    }
+    const attribution = toAttribution(attributionResult.data);
+
     const parseResult = chatCompletionRequestSchema.safeParse(request.body);
     if (!parseResult.success) {
       return reply.status(400).send({
@@ -90,6 +103,7 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
         httpStatusCode: null,
         errorMessage,
         ...EMPTY_USAGE,
+        ...attribution,
         latencyMs,
       };
       await logRequest(pool, logEntry);
@@ -101,6 +115,7 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
       requestedModel: body.model,
       resolvedModelId: providerModelId,
       requestBody: outbound.body,
+      ...attribution,
     };
 
     let upstreamResponse: Response;

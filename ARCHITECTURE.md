@@ -30,30 +30,36 @@ flowchart LR
 
 The handler in `src/routes/chatCompletions.ts` runs, in this exact order:
 
-1. Validate the request body against a Zod schema modeling OpenAI's Chat Completions request
+1. Validate the optional attribution headers (`AiFinOps-*`, see [Attribution
+   headers](#attribution-headers) below) against a Zod schema. An oversized value is rejected
+   with a `400` before anything else runs. Valid values are parsed once and carried through
+   every log entry written for this request, on every path below.
+2. Validate the request body against a Zod schema modeling OpenAI's Chat Completions request
    shape. If `stream: true` is present, reject immediately with a `400` — streaming isn't
    supported yet, and it's never silently ignored or faked.
-2. Split `model` on the **first** `/`. Everything before it is the `provider`; everything after
+3. Split `model` on the **first** `/`. Everything before it is the `provider`; everything after
    it is the `providerModelId`, which may itself contain more slashes (e.g. `openai/gpt-4o`).
-3. Look up `provider` in `config/providers.json`. If missing, `400 {"error": "provider not
+4. Look up `provider` in `config/providers.json`. If missing, `400 {"error": "provider not
 provisioned: <provider>"}`.
-4. Look up `providerModelId` in `config/providerModelMap.json[provider]`. If missing, `400
+5. Look up `providerModelId` in `config/providerModelMap.json[provider]`. If missing, `400
 {"error": "model not provisioned for provider <provider>: <providerModelId>"}`.
-5. Resolve a `ProviderTransformer` for `provider` via `src/transformers/registry.ts`.
-6. The transformer builds the outbound request — for OpenRouter, that's `POST
+6. Resolve a `ProviderTransformer` for `provider` via `src/transformers/registry.ts`.
+7. The transformer builds the outbound request — for OpenRouter, that's `POST
 {baseUrl}/chat/completions` with the caller's body, `model` swapped for the resolved
    `providerModelId`, and (if the provider declares one) `Authorization: Bearer` attached from
    the gateway's own environment. If building the request fails (e.g. a missing API key), that's
    caught, logged to Postgres as a `status: 'error'` row, and returned as a `500` — never an
-   unhandled crash.
-7. Send the request, capture wall-clock latency.
-8. On success, `parseResponse` validates the response shape and explicitly extracts the `usage`
+   unhandled crash. The transformer only ever receives the parsed body — never the attribution
+   headers — so attribution data cannot reach the provider even by accident.
+8. Send the request, capture wall-clock latency.
+9. On success, `parseResponse` validates the response shape and explicitly extracts the `usage`
    object for logging, rather than re-serializing the upstream body blindly.
-9. **Before responding to the caller**, insert one row into the `requests` table — full request,
-   full response (or error), and every usage/cost field available.
-10. Return the (still OpenAI-shaped) response to the caller with the original upstream status
+10. **Before responding to the caller**, insert one row into the `requests` table — full request,
+    full response (or error), every usage/cost field available, and the attribution values from
+    step 1.
+11. Return the (still OpenAI-shaped) response to the caller with the original upstream status
     code.
-11. On any failure (network error, non-2xx upstream, invalid response shape), a row is still
+12. On any failure (network error, non-2xx upstream, invalid response shape), a row is still
     logged with `status = 'error'` and the error message. A logging failure itself never crashes
     the request handler — it's caught and printed to server logs so it's at least visible
     operationally.
@@ -69,6 +75,7 @@ src/
     providerModelMap.ts       Loads/validates config/providerModelMap.json
   routes/
     chatCompletions.ts        POST /v1/chat/completions handler
+    health.ts                  GET /health handler
   transformers/
     types.ts                  ProviderTransformer interface
     openrouter.ts              OpenRouterTransformer implementation
@@ -78,6 +85,7 @@ src/
     logRequest.ts               insert one row per request/response
   schemas/
     chatCompletionRequest.ts    Zod schema for the inbound OpenAI-shaped body
+    attribution.ts               Zod schema for the optional attribution headers
 config/
   providers.json                which providers are provisioned
   providerModelMap.json         which model IDs are provisioned per provider
@@ -198,12 +206,27 @@ CREATE TABLE IF NOT EXISTS requests (
   reasoning_tokens      INTEGER,
   cost                  NUMERIC(12, 6),     -- OpenRouter's own reported cost, in credits
   upstream_inference_cost NUMERIC(12, 6),   -- from usage.cost_details.upstream_inference_cost
-  latency_ms            INTEGER NOT NULL
+  latency_ms            INTEGER NOT NULL,
+  region_id             TEXT,               -- optional attribution, see below
+  environment           TEXT,
+  tenant_id             TEXT,
+  application_id        TEXT,
+  module_id             TEXT,
+  process_or_user_id    TEXT,
+  transaction_id        TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests (created_at);
 CREATE INDEX IF NOT EXISTS idx_requests_provider_model ON requests (provider, resolved_model_id);
+CREATE INDEX IF NOT EXISTS idx_requests_tenant_id ON requests (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_requests_application_id ON requests (application_id);
+CREATE INDEX IF NOT EXISTS idx_requests_tenant_app ON requests (tenant_id, application_id);
+CREATE INDEX IF NOT EXISTS idx_requests_transaction_id ON requests (transaction_id);
 ```
+
+`npm run setup-db` is idempotent and safe to re-run against an existing database — it also issues
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for each attribution column, so upgrading an
+already-running deployment just means running it again.
 
 `src/db/logRequest.ts` accepts a typed object covering every column above and performs the
 insert — called from the route handler on both the success and every failure path. It never
@@ -218,6 +241,74 @@ WHERE created_at > now() - interval '24 hours'
 GROUP BY resolved_model_id
 ORDER BY total_cost DESC;
 ```
+
+## Attribution headers
+
+Optional cost-attribution metadata a caller can send alongside a request. Captured in the
+`requests` table for later filtering/dashboarding; **never forwarded to the LLM provider.**
+
+| Header                        | DB column            | Description                                 |
+| ----------------------------- | -------------------- | ------------------------------------------- |
+| `AiFinOps-Region-Id`          | `region_id`          | Geographic or cloud infrastructure zone     |
+| `AiFinOps-Environment`        | `environment`        | Deployment stage                            |
+| `AiFinOps-Tenant-Id`          | `tenant_id`          | Client or organization account              |
+| `AiFinOps-Application-Id`     | `application_id`     | Macro-level software application or service |
+| `AiFinOps-Module-Id`          | `module_id`          | Sub-system or component within the app      |
+| `AiFinOps-Process-Or-User-Id` | `process_or_user_id` | System process ID or the active user ID     |
+| `AiFinOps-Transaction-Id`     | `transaction_id`     | Unique trace ID for one request workflow    |
+
+All optional, all free-form strings capped at 255 characters (`src/schemas/attribution.ts`); an
+oversized value is rejected with a `400` before anything else runs — no fixed vocabulary is
+enforced, values are entirely caller-defined.
+
+Conceptually, these nest (documentation only — not enforced via foreign keys or a hierarchy
+table in the schema):
+
+```
+[Level 1: Global Scope]      Infrastructure (RegionId)
+                                     │
+[Level 2: Stage Scope]       Environment
+                                     │
+[Level 3: Client Scope]      Tenant / Organization (TenantId)
+                                     │
+[Level 4: System Scope]      Application (ApplicationId)
+                                     │
+[Level 5: Component Scope]   Sub-System (ModuleId)
+                                     │
+[Level 6: Context Scope]     Actor / Executor (ProcessOrUserId)
+                                     │
+[Level 7: Runtime Scope]     Execution Path (TransactionId)
+```
+
+**Why headers, not a body field:** `transformer.buildRequest()` only ever receives the parsed
+OpenAI-shaped body, never `request.headers` — so attribution data cannot reach the provider by
+construction, not because of a "strip this field before forwarding" step that a future refactor
+could accidentally break.
+
+**Indexing:** `tenant_id`, `application_id`, their combination, and `transaction_id` are indexed
+up front, since they map directly to the attribution questions already in the README ("cost by
+tenant/app," "total cost of one workflow"). `region_id`/`environment`/`module_id`/
+`process_or_user_id` are left unindexed until real dashboard query patterns justify the
+write-cost of an index on every insert.
+
+## Health endpoint
+
+`GET /health` — no auth, safe to expose publicly, reports no secrets or business data:
+
+```json
+{
+  "status": "ok",
+  "version": "0.1.1",
+  "uptimeSeconds": 3421,
+  "database": "reachable",
+  "providers": { "openrouter": "ready" }
+}
+```
+
+Returns `200` if Postgres is reachable (re-running the same `SELECT 1` check used at boot),
+`503` otherwise. `providers` reflects `getProviderReadiness()` per provider in
+`config/providers.json` — informational only, it does not affect the status code or HTTP status.
+Implementation: `src/routes/health.ts`.
 
 ## Extending AiFinOps — adding a new provider
 

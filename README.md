@@ -36,8 +36,9 @@ out and it's a `400`, no matter what the provider itself would accept:
 "openrouter": ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"]
 ```
 
-**v1 ships today:** full request-level cost logging for OpenRouter. **Next up:** rolling that up
-by team/user/tenant and a usage dashboard — see [Roadmap](#roadmap) below.
+**v1 ships today:** full request-level cost logging for OpenRouter, with optional attribution
+tags (tenant, application, module, user, transaction, region, environment) captured on every
+call. **Next up:** rolling that up into a usage dashboard — see [Roadmap](#roadmap) below.
 
 → For exactly how requests are validated, routed, and logged, see
 [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -107,6 +108,10 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
 - Added a `GET /health` endpoint — reports overall status, app version, uptime, Postgres
   reachability (`200`/`503`), and per-provider readiness. Safe to expose without inbound auth;
   reports no secrets or business data.
+- Added optional cost-attribution headers (`AiFinOps-Region-Id`, `-Environment`, `-Tenant-Id`,
+  `-Application-Id`, `-Module-Id`, `-Process-Or-User-Id`, `-Transaction-Id`) — captured in the
+  `requests` table for future dashboard filtering, never forwarded to the LLM provider. See
+  [ARCHITECTURE.md](ARCHITECTURE.md#attribution-headers) for the full field reference.
 
 ### 0.1.0 — 2026-08-19
 
