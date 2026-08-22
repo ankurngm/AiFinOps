@@ -14,6 +14,7 @@ import { getTransformer } from '../transformers/registry.js';
 import { pool } from '../db/pool.js';
 import { logRequest, type RequestLogEntry } from '../db/logRequest.js';
 import { logAudit } from '../logging/auditLog.js';
+import { getCurrentPricing, computeCost } from '../config/modelPricing.js';
 
 const EMPTY_USAGE = {
   promptTokens: null,
@@ -257,20 +258,32 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
       return reply.status(502).send(callerResponse);
     }
 
+    // Fill in cost from config/modelPricing.json when the provider didn't
+    // report one natively (e.g. Ollama). Only affects what's logged — the
+    // response returned to the caller is never mutated.
+    let cost = parsed.usage.cost;
+    if (cost === null) {
+      const pricing = getCurrentPricing(provider, providerModelId);
+      if (pricing) {
+        cost = computeCost(pricing, parsed.usage);
+      }
+    }
+    const enrichedUsage = { ...parsed.usage, cost };
+
     const logEntry: RequestLogEntry = {
       ...baseLogEntry,
       responseBody: parsed.body,
       status: 'success',
       httpStatusCode: upstreamResponse.status,
       errorMessage: null,
-      promptTokens: parsed.usage.promptTokens,
-      completionTokens: parsed.usage.completionTokens,
-      totalTokens: parsed.usage.totalTokens,
-      cachedTokens: parsed.usage.cachedTokens,
-      cacheWriteTokens: parsed.usage.cacheWriteTokens,
-      reasoningTokens: parsed.usage.reasoningTokens,
-      cost: parsed.usage.cost,
-      upstreamInferenceCost: parsed.usage.upstreamInferenceCost,
+      promptTokens: enrichedUsage.promptTokens,
+      completionTokens: enrichedUsage.completionTokens,
+      totalTokens: enrichedUsage.totalTokens,
+      cachedTokens: enrichedUsage.cachedTokens,
+      cacheWriteTokens: enrichedUsage.cacheWriteTokens,
+      reasoningTokens: enrichedUsage.reasoningTokens,
+      cost: enrichedUsage.cost,
+      upstreamInferenceCost: enrichedUsage.upstreamInferenceCost,
       latencyMs,
     };
     await logRequest(pool, logEntry);
@@ -284,7 +297,7 @@ export async function chatCompletionsRoute(app: FastifyInstance): Promise<void> 
       errorMessage: null,
       latencyMs,
       attribution,
-      usage: parsed.usage,
+      usage: enrichedUsage,
       callerRequest: body,
       providerRequest: outbound.body,
       providerResponse: parsed.body,

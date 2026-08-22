@@ -1,0 +1,14 @@
+{
+  "ollama": {
+    "llama3.2:3b": [
+      {
+        "startDate": "2026-06-15",
+        "endDate": null,
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "cachedInputPerMillion": null,
+        "cacheWritePerMillion": null
+      }
+    ]
+  }
+}

@@ -73,13 +73,15 @@ src/
     env.ts                   Zod schema for process.env — infra vars only (PG*, PORT, NODE_ENV)
     providers.ts              Loads/validates config/providers.json, provider readiness check
     providerModelMap.ts       Loads/validates config/providerModelMap.json
+    modelPricing.ts            Loads/validates config/modelPricing.json, cost lookup + math
   routes/
     chatCompletions.ts        POST /v1/chat/completions handler
     health.ts                  GET /health handler
   transformers/
     types.ts                  ProviderTransformer interface
     openrouter.ts              OpenRouterTransformer implementation
-    registry.ts                 provider name -> transformer instance lookup
+    ollama.ts                   OllamaTransformer implementation
+    registry.ts                   provider name -> transformer instance lookup
   db/
     pool.ts                    pg Pool, built from PG* env vars
     logRequest.ts               insert one row per request/response
@@ -91,6 +93,7 @@ src/
 config/
   providers.json                which providers are provisioned
   providerModelMap.json         which model IDs are provisioned per provider
+  modelPricing.json             dated per-token pricing, for providers that don't self-report cost
 scripts/
   setup-db.ts                   creates the DB (if missing) + tables — `npm run setup-db`
 ```
@@ -144,20 +147,31 @@ rejected with a `400` even if the upstream provider would happily serve it.
   "openrouter": {
     "displayName": "OpenRouter",
     "baseUrl": "https://openrouter.ai/api/v1",
-    "apiKeyEnvVar": "OPENROUTER_API_KEY"
+    "apiKeyEnvVar": "OPENROUTER_API_KEY",
+    "requiresPricingCheck": false
+  },
+  "ollama": {
+    "displayName": "Ollama",
+    "baseUrl": "http://localhost:11434/v1",
+    "requiresPricingCheck": false
   }
 }
 ```
 
 `apiKeyEnvVar` is optional — omit it for a keyless/local provider and no `Authorization` header
-is ever attached for it.
+is ever attached for it. `requiresPricingCheck` controls the boot-time pricing check described
+in [Model pricing](#model-pricing) below — set explicitly to `false` for a provider that
+self-reports cost (OpenRouter) or is a known-free default (Ollama's local models); omit it
+entirely to fail toward "check and warn."
 
 **`config/providerModelMap.json`** — which model IDs are allowed per provider, using each
-provider's own native model naming (for OpenRouter, its `vendor/model` IDs):
+provider's own native model naming (for OpenRouter, its `vendor/model` IDs; for Ollama, its own
+model tags, with Ollama Cloud models carrying a `:cloud` suffix, e.g. `"gpt-oss:120b-cloud"`):
 
 ```json
 {
-  "openrouter": ["openai/gpt-4o", "openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"]
+  "openrouter": ["openai/gpt-4o", "openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
+  "ollama": ["llama3.2:3b"]
 }
 ```
 
@@ -178,6 +192,64 @@ restart the gateway:
 Callers then address it as `"openrouter/mistralai/mistral-large"` in their request's `model`
 field (the gateway splits on the _first_ `/`; everything after it — including any further
 slashes — is passed through as-is to the provider).
+
+## Model pricing
+
+Some providers report cost directly in their response (OpenRouter). Others — Ollama, whether
+local or a `:cloud`-suffixed model — only report token counts, never a price. For those,
+`config/modelPricing.json` supplies per-token rates, keyed by `(provider, model)`:
+
+```json
+{
+  "ollama": {
+    "llama3.2:3b": [
+      {
+        "startDate": "2026-06-15",
+        "endDate": null,
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "cachedInputPerMillion": null,
+        "cacheWritePerMillion": null
+      }
+    ]
+  }
+}
+```
+
+**Dated, not a flat rate.** Each entry is a list of records with a `[startDate, endDate)` window
+(`endDate` is the first day the record no longer applies — exclusive, not inclusive). Only the
+one record whose window covers _today_ is ever used to compute a fresh cost; older records stay
+in the file for history but are never selected again. When a price changes: set `endDate` on the
+old record, append a new one with `startDate` equal to that `endDate` and `endDate: null`.
+
+**Being unpriced never blocks a call.** Provisioning (`providerModelMap.json`) and pricing
+(`modelPricing.json`) are deliberately independent gates. A model can be fully approved and
+callable with zero pricing data — the call still processes normally, and `cost` is simply logged
+as `NULL` (both in Postgres and the audit log), meaning "not specified," not `0`, which means
+"confirmed free."
+
+**Where the cost math runs.** Transformers never compute cost themselves — `OllamaTransformer`
+always reports `cost: null`, same as any future provider without native pricing. A single
+enrichment step in `src/routes/chatCompletions.ts`, right after a successful `parseResponse`,
+fills in `cost` from `modelPricing.json` only when the transformer didn't supply one. This keeps
+transformers mechanical (translate request/response shapes) and the one cross-cutting concern
+(pricing) in one place. **The enrichment only affects what's logged** — the response body
+returned to the caller is never mutated; Ollama's real response has no cost field and stays that
+way.
+
+`cachedInputPerMillion`/`cacheWritePerMillion` are optional per record. Cached tokens are
+treated as a discounted subset of prompt tokens (falling back to the normal input rate if no
+cache rate is given, so an unpriced discount never silently undercounts cost); cache-write
+tokens are treated as a separate, additional operation, priced only if a rate is given. See
+`computeCost()` in `src/config/modelPricing.ts` for the exact math.
+
+**Boot-time visibility, not enforcement.** For every provider whose `requiresPricingCheck`
+resolves to `true` (explicit `true`, or the field is entirely absent), the gateway walks its
+approved models and warns (non-fatal) about any without a currently-valid pricing record. For a
+provider with `requiresPricingCheck: false`, a different, non-fatal reminder prints instead —
+pricing enforcement is off for that provider, so if some of its models are actually billed (e.g.
+Ollama Cloud, added later, sharing the `ollama` provider entry with free local models), that
+needs a deliberate flip to `true` plus pricing entries for the billed models specifically.
 
 ## Database schema
 
@@ -209,8 +281,8 @@ CREATE TABLE IF NOT EXISTS requests (
   cached_tokens         INTEGER,
   cache_write_tokens    INTEGER,
   reasoning_tokens      INTEGER,
-  cost                  NUMERIC(12, 6),     -- OpenRouter's own reported cost, in credits
-  upstream_inference_cost NUMERIC(12, 6),   -- from usage.cost_details.upstream_inference_cost
+  cost                  NUMERIC(12, 6),     -- provider-reported, or filled from modelPricing.json; NULL if neither
+  upstream_inference_cost NUMERIC(12, 6),   -- from usage.cost_details.upstream_inference_cost (OpenRouter only)
   latency_ms            INTEGER NOT NULL,
   region_id             TEXT,               -- optional attribution, see below
   environment           TEXT,
@@ -391,16 +463,20 @@ interface ProviderTransformer {
 
 `buildRequest` turns our internal (OpenAI-shaped) request into whatever the upstream provider
 actually expects; `parseResponse` validates and normalizes what comes back, extracting usage/cost
-for logging. Adding a new provider (Anthropic native, Gemini, a local Ollama endpoint, etc.)
-means:
+for logging. Adding a new provider (Anthropic native, Gemini, etc.) means:
 
 1. Implement `ProviderTransformer` in a new file, e.g. `src/transformers/anthropic.ts`.
 2. Add an entry for it in `config/providers.json`.
 3. Add its allowed model IDs to `config/providerModelMap.json`.
 4. Register an instance of it in `src/transformers/registry.ts`.
+5. If it doesn't report cost natively, add its models to `config/modelPricing.json` (see [Model
+   pricing](#model-pricing)) — not required for the call to work, only for `cost` to be non-null.
 
 **No changes to `src/routes/chatCompletions.ts` are required** — the route only ever talks to
-the `ProviderTransformer` interface, never to a concrete provider.
+the `ProviderTransformer` interface, never to a concrete provider. `src/transformers/ollama.ts`
+is a real example of this: it's a near-copy of `OpenRouterTransformer` aimed at Ollama's
+OpenAI-compatible `/v1/chat/completions` endpoint instead, with no changes needed anywhere else
+in the app.
 
 ## Development
 

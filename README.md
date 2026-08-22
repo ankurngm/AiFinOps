@@ -124,6 +124,12 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
   across Fastify's own logs, the audit log file, and a new `request_id` column in Postgres, so
   any of the three can be used to find the others. Postgres logging is unaffected either way.
   See [ARCHITECTURE.md](ARCHITECTURE.md#file-based-audit-logging) for the full design.
+- Added Ollama support (`OllamaTransformer`, via Ollama's OpenAI-compatible endpoint) — Supporting local models.
+- Added dated, per-token model pricing (`config/modelPricing.json`) for providers that don't
+  self-report cost. Provisioning and pricing are independent gates — an approved-but-unpriced
+  model still processes normally, with `cost` logged as `NULL`, never blocked. Boot-time,
+  non-fatal visibility into pricing gaps via each provider's `requiresPricingCheck` flag. See
+  [ARCHITECTURE.md](ARCHITECTURE.md#model-pricing) for the full design.
 
 ### 0.1.0 — 2026-08-19
 

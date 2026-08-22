@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import { env } from './config/env.js';
 import { getProviderReadiness } from './config/providers.js';
+import { checkPricingCoverage } from './config/modelPricing.js';
 import { pool } from './db/pool.js';
 import { chatCompletionsRoute } from './routes/chatCompletions.js';
 import { healthRoute } from './routes/health.js';
@@ -32,6 +33,24 @@ function logProviderReadiness(): void {
   }
 }
 
+function logPricingCoverage(): void {
+  const { checksSkipped, missing } = checkPricingCoverage();
+
+  for (const providerName of checksSkipped) {
+    console.log(
+      `ℹ️  Pricing check is off for "${providerName}" — if any of its models are billed, ` +
+        'set requiresPricingCheck: true in config/providers.json.',
+    );
+  }
+
+  if (missing.length > 0) {
+    console.warn(
+      `⚠️  No valid pricing entry for: ${missing.join(', ')} — cost will be logged as NULL ` +
+        'for these until config/modelPricing.json is updated.',
+    );
+  }
+}
+
 async function main(): Promise<void> {
   console.warn(
     '⚠️  AiFinOps is running WITHOUT inbound authentication — do not expose this port on an untrusted network.',
@@ -46,6 +65,7 @@ async function main(): Promise<void> {
   }
 
   logProviderReadiness();
+  logPricingCoverage();
 
   const app = Fastify({
     logger: true,
