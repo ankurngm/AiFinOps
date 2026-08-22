@@ -66,7 +66,15 @@ function loadModelPricing(): ModelPricing {
 
 export const modelPricing: ModelPricing = loadModelPricing();
 
-function isoDate(date: Date): string {
+// Deliberately UTC, not the server's local timezone: pricing dates need one
+// unambiguous clock, not one that silently shifts with wherever the process
+// happens to be deployed (two instances in different timezones would
+// otherwise disagree about which record is "current"). The real
+// consequence: a record's startDate/endDate takes effect at UTC midnight,
+// not local midnight — e.g. "startDate": "2026-08-22" starts at 5pm on the
+// 21st for someone in US Pacific time, not midnight their own clock. Set
+// pricing dates with that in mind.
+function utcDateString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
@@ -91,7 +99,8 @@ function findEffectiveRecord(
 
 /**
  * Finds the currently-effective pricing record for (provider, model) — the
- * one whose [startDate, endDate) range covers `asOf` (defaults to now).
+ * one whose [startDate, endDate) range covers `asOf` (defaults to now, and
+ * is always compared as a UTC calendar day — see utcDateString() above).
  * Expired or not-yet-effective records are ignored; only the live one is
  * ever used to compute a fresh cost. Old records stay in the file for
  * history, they're just never selected here.
@@ -116,7 +125,7 @@ export function getCurrentPricing(
   model: string,
   asOf: Date = new Date(),
 ): PricingRecord | undefined {
-  const today = isoDate(asOf);
+  const today = utcDateString(asOf);
   const providerPricing = modelPricing[provider];
   const modelRecords = providerPricing?.[model];
 

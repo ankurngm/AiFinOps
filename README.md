@@ -139,6 +139,10 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
 - `config/modelPricing.json`'s shipped default now uses that wildcard — `ollama: { "*": [{ ...,
 "inputPerMillion": 0, "outputPerMillion": 0 }] }` — instead of a model-specific entry, so any
   approved local Ollama model is `$0` by default without needing its own record.
+- Documented (and named explicitly in code — `utcDateString()`, not the previous unlabeled
+  `isoDate()`) that pricing `startDate`/`endDate` transitions happen at UTC midnight, not the
+  server's local time — a real, previously-unstated gap where a date could take effect up to
+  half a day off from what an operator typing that date actually intended.
 
 ### 0.1.0 — 2026-08-19
 

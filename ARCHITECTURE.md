@@ -229,6 +229,14 @@ older records stay in the file for history but are never selected again. When a 
 set `endDate` on the old record, append a new one with `startDate` equal to that `endDate` and
 `endDate: null`.
 
+**"Today" is a UTC calendar day, not the server's local one.** `startDate`/`endDate` transitions
+take effect at UTC midnight, deliberately — a single unambiguous clock, rather than one that
+shifts depending on which timezone the process happens to be deployed in (two instances in
+different timezones would otherwise disagree about which record is current). The practical
+effect: `"startDate": "2026-08-22"` takes effect at 5pm on the 21st for someone in US Pacific
+time, not midnight their own clock. Set dates with that in mind — depending on your timezone, a
+transition can land up to half a day off from your own local calendar day.
+
 **If more than one record is valid for the same date** (a data-entry mistake — windows should
 never overlap), `getCurrentPricing()` returns the **first matching record in array order**, not
 the newest or the cheapest. This is a plain `Array.find()`, not a conflict-resolution rule — the
