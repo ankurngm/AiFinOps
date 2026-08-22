@@ -217,10 +217,19 @@ local or a `:cloud`-suffixed model — only report token counts, never a price. 
 ```
 
 **Dated, not a flat rate.** Each entry is a list of records with a `[startDate, endDate)` window
-(`endDate` is the first day the record no longer applies — exclusive, not inclusive). Only the
-one record whose window covers _today_ is ever used to compute a fresh cost; older records stay
-in the file for history but are never selected again. When a price changes: set `endDate` on the
-old record, append a new one with `startDate` equal to that `endDate` and `endDate: null`.
+(`endDate` is the first day the record no longer applies — exclusive, not inclusive). **`endDate:
+null` means the record has no known end and is treated as currently in effect** — this is the
+normal state for whatever price is active right now; only the newest record for a model should
+have it. Only the one record whose window covers _today_ is ever used to compute a fresh cost;
+older records stay in the file for history but are never selected again. When a price changes:
+set `endDate` on the old record, append a new one with `startDate` equal to that `endDate` and
+`endDate: null`.
+
+**If more than one record is valid for the same date** (a data-entry mistake — windows should
+never overlap), `getCurrentPricing()` returns the **first matching record in array order**, not
+the newest or the cheapest. This is a plain `Array.find()`, not a conflict-resolution rule — the
+file's array order is the tiebreaker, so overlapping windows should be treated as a bug in the
+data to fix, not a mechanism to rely on.
 
 **Being unpriced never blocks a call.** Provisioning (`providerModelMap.json`) and pricing
 (`modelPricing.json`) are deliberately independent gates. A model can be fully approved and
