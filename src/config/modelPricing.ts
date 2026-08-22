@@ -70,24 +70,14 @@ function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-/**
- * Finds the currently-effective pricing record for (provider, model) — the
- * one whose [startDate, endDate) range covers `asOf` (defaults to now).
- * Expired or not-yet-effective records are ignored; only the live one is
- * ever used to compute a fresh cost. Old records stay in the file for
- * history, they're just never selected here.
- */
-export function getCurrentPricing(
-  provider: string,
-  model: string,
-  asOf: Date = new Date(),
+function findEffectiveRecord(
+  records: PricingRecord[] | undefined,
+  today: string,
 ): PricingRecord | undefined {
-  const records = modelPricing[provider]?.[model];
   if (!records) {
     return undefined;
   }
 
-  const today = isoDate(asOf);
   return records.find((record) => {
     if (record.startDate > today) {
       return false;
@@ -97,6 +87,44 @@ export function getCurrentPricing(
     }
     return true;
   });
+}
+
+/**
+ * Finds the currently-effective pricing record for (provider, model) — the
+ * one whose [startDate, endDate) range covers `asOf` (defaults to now).
+ * Expired or not-yet-effective records are ignored; only the live one is
+ * ever used to compute a fresh cost. Old records stay in the file for
+ * history, they're just never selected here.
+ *
+ * Falls back to a provider-level "*" entry (exact model match, case-
+ * sensitive, same as everywhere else) — but only when the model has **no
+ * pricing history at all** (no key for it under this provider). This is
+ * what lets a provider like Ollama, where most models are free, declare
+ * that once instead of repeating an identical $0 record for every model.
+ *
+ * A model that DOES have its own entry never falls back to "*", even if
+ * every one of its records has expired — a model with recorded history was
+ * deliberately priced at some point, so an all-expired history means
+ * someone forgot to add the next record, not "treat this like an
+ * unconfigured model." That's a real gap worth surfacing as NULL (and the
+ * boot-time coverage check will flag it), not silently masking it with a
+ * possibly-wrong wildcard rate. A specific model's own currently-valid
+ * entry always takes priority over "*" when both would otherwise apply.
+ */
+export function getCurrentPricing(
+  provider: string,
+  model: string,
+  asOf: Date = new Date(),
+): PricingRecord | undefined {
+  const today = isoDate(asOf);
+  const providerPricing = modelPricing[provider];
+  const modelRecords = providerPricing?.[model];
+
+  if (modelRecords !== undefined) {
+    return findEffectiveRecord(modelRecords, today);
+  }
+
+  return findEffectiveRecord(providerPricing?.['*'], today);
 }
 
 export interface UsageForCost {

@@ -202,7 +202,7 @@ local or a `:cloud`-suffixed model — only report token counts, never a price. 
 ```json
 {
   "ollama": {
-    "llama3.2:3b": [
+    "*": [
       {
         "startDate": "2026-06-15",
         "endDate": null,
@@ -215,6 +215,10 @@ local or a `:cloud`-suffixed model — only report token counts, never a price. 
   }
 }
 ```
+
+(This is the shipped default — a `"*"` wildcard at `$0`, since most Ollama usage is local and
+free. See "Wildcard fallback" below for exactly how it applies, and its one important
+exception.)
 
 **Dated, not a flat rate.** Each entry is a list of records with a `[startDate, endDate)` window
 (`endDate` is the first day the record no longer applies — exclusive, not inclusive). **`endDate:
@@ -236,6 +240,27 @@ data to fix, not a mechanism to rely on.
 callable with zero pricing data — the call still processes normally, and `cost` is simply logged
 as `NULL` (both in Postgres and the audit log), meaning "not specified," not `0`, which means
 "confirmed free."
+
+**Wildcard fallback with `"*"`.** A provider entry can include a `"*"` "model" alongside (or
+instead of) specific ones, as a provider-level default rate. This exists because most Ollama
+usage is local and genuinely free — declaring that once is simpler than repeating an identical
+`$0` record for every local model. The mechanism itself isn't Ollama-specific (any provider can
+use `"*"`), it's just only populated for Ollama today. Matching is exact and case-sensitive in
+both directions, same as everywhere else provider/model strings are compared.
+
+**`"*"` only applies when a model has no pricing history at all — never as a rescue for an
+expired one.** `getCurrentPricing()` checks whether the model has **any key** under that provider
+in `modelPricing.json`, not just whether it has a currently-valid record:
+
+- No key for the model at all → fall back to `"*"` (if present).
+- A key exists but every record under it has expired (or none is valid yet) → returns `NULL`,
+  **`"*"` is never consulted.**
+
+The reasoning: a model with its own recorded history was deliberately priced at some point — an
+all-expired history means someone forgot to add the next record, which is a real gap worth
+surfacing, not something to quietly paper over with a possibly-wrong wildcard rate. This is also
+why the boot-time coverage check still flags a lapsed model even when the provider has a healthy
+`"*"` entry — the wildcard only suppresses that warning for models with no history at all.
 
 **Where the cost math runs.** Transformers never compute cost themselves — `OllamaTransformer`
 always reports `cost: null`, same as any future provider without native pricing. A single

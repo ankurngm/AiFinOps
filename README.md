@@ -130,6 +130,15 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
   model still processes normally, with `cost` logged as `NULL`, never blocked. Boot-time,
   non-fatal visibility into pricing gaps via each provider's `requiresPricingCheck` flag. See
   [ARCHITECTURE.md](ARCHITECTURE.md#model-pricing) for the full design.
+- Added a `"*"` wildcard fallback in `modelPricing.json` — a provider-level default rate used
+  when a model has **no pricing history at all**, so a provider where most models are free
+  (Ollama) doesn't need an identical rate repeated for every one of them. A model with its own
+  entry never falls back to `"*"`, even if every record under it has expired — an all-expired
+  history means someone forgot to add the next record, and that's meant to surface as `NULL`
+  (and a boot-time warning), not be silently masked by the wildcard rate.
+- `config/modelPricing.json`'s shipped default now uses that wildcard — `ollama: { "*": [{ ...,
+"inputPerMillion": 0, "outputPerMillion": 0 }] }` — instead of a model-specific entry, so any
+  approved local Ollama model is `$0` by default without needing its own record.
 
 ### 0.1.0 — 2026-08-19
 
