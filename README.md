@@ -98,7 +98,7 @@ of this additive, not a rewrite.
 
 All notable changes to this project are documented here. Dates are in `YYYY-MM-DD` format.
 
-### 0.1.1 — 2026-08-30
+### 0.1.2 — 2026-08-30
 
 - Added Ollama support (`OllamaTransformer`, via Ollama's OpenAI-compatible endpoint) — Supporting local models.
 - Added dated, per-token model pricing (`config/modelPricing.json`) for providers that don't
