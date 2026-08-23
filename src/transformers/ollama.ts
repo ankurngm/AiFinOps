@@ -6,13 +6,8 @@
  */
 
 import { z } from 'zod';
-import type { ProviderConfig } from '../config/providers.js';
-import type {
-  BuildRequestParams,
-  OutboundRequest,
-  ParsedResponse,
-  ProviderTransformer,
-} from './types.js';
+import { OpenAICompatibleTransformer } from './openAICompatibleTransformer.js';
+import type { ParsedResponse } from './types.js';
 
 // Ollama's OpenAI-compatible /v1/chat/completions endpoint — verified
 // against a live local instance. Same shape as OpenAI's own usage object,
@@ -41,38 +36,10 @@ const ollamaResponseSchema = z
  * names) — a local Ollama server proxies cloud-model calls transparently
  * once the host machine has run `ollama signin`, so both cases hit the same
  * baseUrl and need no Authorization header from AiFinOps itself.
+ * buildRequest is inherited unchanged from OpenAICompatibleTransformer.
  */
-export class OllamaTransformer implements ProviderTransformer {
+export class OllamaTransformer extends OpenAICompatibleTransformer {
   readonly providerName = 'ollama';
-
-  constructor(private readonly config: ProviderConfig) {}
-
-  buildRequest({ providerModelId, requestBody }: BuildRequestParams): OutboundRequest {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (this.config.apiKeyEnvVar) {
-      const apiKey = process.env[this.config.apiKeyEnvVar];
-      if (!apiKey) {
-        throw new Error(
-          `Missing API key: environment variable ${this.config.apiKeyEnvVar} is not set`,
-        );
-      }
-      headers.Authorization = `Bearer ${apiKey}`;
-    }
-
-    const { model: _originalModel, ...rest } = requestBody;
-
-    return {
-      url: `${this.config.baseUrl}/chat/completions`,
-      headers,
-      body: {
-        ...rest,
-        model: providerModelId,
-      },
-    };
-  }
 
   parseResponse(rawResponse: unknown): ParsedResponse {
     const result = ollamaResponseSchema.safeParse(rawResponse);

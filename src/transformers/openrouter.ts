@@ -6,13 +6,8 @@
  */
 
 import { z } from 'zod';
-import type { ProviderConfig } from '../config/providers.js';
-import type {
-  BuildRequestParams,
-  OutboundRequest,
-  ParsedResponse,
-  ProviderTransformer,
-} from './types.js';
+import { OpenAICompatibleTransformer } from './openAICompatibleTransformer.js';
+import type { ParsedResponse } from './types.js';
 
 const usageSchema = z.object({
   prompt_tokens: z.number().nullish(),
@@ -52,38 +47,10 @@ const openRouterResponseSchema = z
  * endpoint, which is already OpenAI-shaped — we mostly pass the body
  * through, swapping our own "provider/model" prefix for OpenRouter's
  * native "vendor/model" id, and extract usage/cost for logging.
+ * buildRequest is inherited unchanged from OpenAICompatibleTransformer.
  */
-export class OpenRouterTransformer implements ProviderTransformer {
+export class OpenRouterTransformer extends OpenAICompatibleTransformer {
   readonly providerName = 'openrouter';
-
-  constructor(private readonly config: ProviderConfig) {}
-
-  buildRequest({ providerModelId, requestBody }: BuildRequestParams): OutboundRequest {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-
-    if (this.config.apiKeyEnvVar) {
-      const apiKey = process.env[this.config.apiKeyEnvVar];
-      if (!apiKey) {
-        throw new Error(
-          `Missing API key: environment variable ${this.config.apiKeyEnvVar} is not set`,
-        );
-      }
-      headers.Authorization = `Bearer ${apiKey}`;
-    }
-
-    const { model: _originalModel, ...rest } = requestBody;
-
-    return {
-      url: `${this.config.baseUrl}/chat/completions`,
-      headers,
-      body: {
-        ...rest,
-        model: providerModelId,
-      },
-    };
-  }
 
   parseResponse(rawResponse: unknown): ParsedResponse {
     const result = openRouterResponseSchema.safeParse(rawResponse);

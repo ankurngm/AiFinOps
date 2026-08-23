@@ -79,6 +79,7 @@ src/
     health.ts                  GET /health handler
   transformers/
     types.ts                  ProviderTransformer interface
+    openAICompatibleTransformer.ts  shared base: buildRequest for any OpenAI-compatible provider
     openrouter.ts              OpenRouterTransformer implementation
     ollama.ts                   OllamaTransformer implementation
     registry.ts                   provider name -> transformer instance lookup
@@ -505,9 +506,26 @@ interface ProviderTransformer {
 
 `buildRequest` turns our internal (OpenAI-shaped) request into whatever the upstream provider
 actually expects; `parseResponse` validates and normalizes what comes back, extracting usage/cost
-for logging. Adding a new provider (Anthropic native, Gemini, etc.) means:
+for logging.
 
-1. Implement `ProviderTransformer` in a new file, e.g. `src/transformers/anthropic.ts`.
+**If the new provider speaks OpenAI's chat completions dialect** — `POST
+{baseUrl}/chat/completions`, an optional Bearer-token `Authorization` header, `model` as a plain
+field — extend `OpenAICompatibleTransformer` (`src/transformers/openAICompatibleTransformer.ts`)
+instead of implementing `ProviderTransformer` directly. It supplies `buildRequest` for you (used
+unmodified by both `OpenRouterTransformer` and `OllamaTransformer` today — not a hypothetical,
+it's identical code that used to be duplicated in both files); you only write `providerName` and
+`parseResponse`, since response shape is where providers actually differ. If a provider's request
+building deviates from that pattern (different auth header, different path), just override
+`buildRequest` in the subclass — normal inheritance, nothing special required.
+
+**If the new provider doesn't fit that shape at all** (a genuinely different native API, e.g.
+Anthropic's `/v1/messages` with `x-api-key` auth), implement `ProviderTransformer` directly
+instead of extending the base class.
+
+Either way, adding a new provider means:
+
+1. Implement `ProviderTransformer` (directly, or via `OpenAICompatibleTransformer`) in a new
+   file, e.g. `src/transformers/anthropic.ts`.
 2. Add an entry for it in `config/providers.json`.
 3. Add its allowed model IDs to `config/providerModelMap.json`.
 4. Register an instance of it in `src/transformers/registry.ts`.
@@ -515,10 +533,7 @@ for logging. Adding a new provider (Anthropic native, Gemini, etc.) means:
    pricing](#model-pricing)) — not required for the call to work, only for `cost` to be non-null.
 
 **No changes to `src/routes/chatCompletions.ts` are required** — the route only ever talks to
-the `ProviderTransformer` interface, never to a concrete provider. `src/transformers/ollama.ts`
-is a real example of this: it's a near-copy of `OpenRouterTransformer` aimed at Ollama's
-OpenAI-compatible `/v1/chat/completions` endpoint instead, with no changes needed anywhere else
-in the app.
+the `ProviderTransformer` interface, never to a concrete provider.
 
 ## Development
 

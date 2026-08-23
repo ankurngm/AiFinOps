@@ -143,6 +143,16 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
   `isoDate()`) that pricing `startDate`/`endDate` transitions happen at UTC midnight, not the
   server's local time — a real, previously-unstated gap where a date could take effect up to
   half a day off from what an operator typing that date actually intended.
+- Extracted the identical `buildRequest` logic shared by `OpenRouterTransformer` and
+  `OllamaTransformer` into a new `OpenAICompatibleTransformer` base class
+  (`src/transformers/openAICompatibleTransformer.ts`). `parseResponse` stays per-provider, since
+  response shape genuinely differs — only the part that was byte-for-byte duplicated moved.
+  No behavior change; verified with the full regression suite (both providers' real calls,
+  attribution, the missing-key error path end-to-end, rejected-model handling, `/health`).
+- Added Ollama + attribution usage examples: `examples/nodejs/ollama-chat-completion-with-attribution.js`
+  (plain `fetch`), `examples/nodejs/ollama-using-openai-sdk-with-attribution.js` (`openai` SDK),
+  and `examples/curl/ollama-chat-completion-with-attribution.sh` — all free, since they call a
+  local model priced at `$0`.
 
 ### 0.1.0 — 2026-08-19
 
