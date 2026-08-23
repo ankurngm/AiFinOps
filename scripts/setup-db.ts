@@ -1,3 +1,10 @@
+/**
+ * Copyright (C) 2026 Ankur Nigam
+ * Licensed under the Elastic License 2.0, plus a supplemental attribution term.
+ * See the LICENSE file in the project root for full terms.
+ * https://github.com/ankurngm/AiFinOps
+ */
+
 import { Client } from 'pg';
 import { env } from '../src/config/env.js';
 
@@ -21,11 +28,34 @@ const CREATE_TABLE_SQL = `
     reasoning_tokens      INTEGER,
     cost                  NUMERIC(12, 6),
     upstream_inference_cost NUMERIC(12, 6),
-    latency_ms            INTEGER NOT NULL
+    latency_ms            INTEGER NOT NULL,
+    region_id             TEXT,
+    environment           TEXT,
+    tenant_id             TEXT,
+    application_id        TEXT,
+    module_id             TEXT,
+    process_or_user_id    TEXT,
+    transaction_id        TEXT,
+    request_id             UUID          -- shared correlation ID with the audit log file
   );
+
+  -- Idempotent migration for databases created before attribution columns existed.
+  ALTER TABLE requests ADD COLUMN IF NOT EXISTS region_id TEXT;
+  ALTER TABLE requests ADD COLUMN IF NOT EXISTS environment TEXT;
+  ALTER TABLE requests ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+  ALTER TABLE requests ADD COLUMN IF NOT EXISTS application_id TEXT;
+  ALTER TABLE requests ADD COLUMN IF NOT EXISTS module_id TEXT;
+  ALTER TABLE requests ADD COLUMN IF NOT EXISTS process_or_user_id TEXT;
+  ALTER TABLE requests ADD COLUMN IF NOT EXISTS transaction_id TEXT;
+  ALTER TABLE requests ADD COLUMN IF NOT EXISTS request_id UUID;
 
   CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests (created_at);
   CREATE INDEX IF NOT EXISTS idx_requests_provider_model ON requests (provider, resolved_model_id);
+  CREATE INDEX IF NOT EXISTS idx_requests_tenant_id ON requests (tenant_id);
+  CREATE INDEX IF NOT EXISTS idx_requests_application_id ON requests (application_id);
+  CREATE INDEX IF NOT EXISTS idx_requests_tenant_app ON requests (tenant_id, application_id);
+  CREATE INDEX IF NOT EXISTS idx_requests_transaction_id ON requests (transaction_id);
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_request_id ON requests (request_id);
 `;
 
 async function main(): Promise<void> {

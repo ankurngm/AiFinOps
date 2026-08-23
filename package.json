@@ -1,7 +1,8 @@
 {
   "name": "aifinops",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An AI FinOps platform that gives teams visibility, control, and governance over LLM usage and cost - starting with an OpenAI-compatible gateway that validates, routes, and logs requests across LLM providers.",
+  "license": "Elastic-2.0",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -22,6 +23,7 @@
     "dotenv": "^16.4.5",
     "fastify": "^5.1.0",
     "pg": "^8.13.1",
+    "winston": "^3.19.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

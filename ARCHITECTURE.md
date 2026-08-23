@@ -30,30 +30,36 @@ flowchart LR
 
 The handler in `src/routes/chatCompletions.ts` runs, in this exact order:
 
-1. Validate the request body against a Zod schema modeling OpenAI's Chat Completions request
+1. Validate the optional attribution headers (`AiFinOps-*`, see [Attribution
+   headers](#attribution-headers) below) against a Zod schema. An oversized value is rejected
+   with a `400` before anything else runs. Valid values are parsed once and carried through
+   every log entry written for this request, on every path below.
+2. Validate the request body against a Zod schema modeling OpenAI's Chat Completions request
    shape. If `stream: true` is present, reject immediately with a `400` — streaming isn't
    supported yet, and it's never silently ignored or faked.
-2. Split `model` on the **first** `/`. Everything before it is the `provider`; everything after
+3. Split `model` on the **first** `/`. Everything before it is the `provider`; everything after
    it is the `providerModelId`, which may itself contain more slashes (e.g. `openai/gpt-4o`).
-3. Look up `provider` in `config/providers.json`. If missing, `400 {"error": "provider not
+4. Look up `provider` in `config/providers.json`. If missing, `400 {"error": "provider not
 provisioned: <provider>"}`.
-4. Look up `providerModelId` in `config/providerModelMap.json[provider]`. If missing, `400
+5. Look up `providerModelId` in `config/providerModelMap.json[provider]`. If missing, `400
 {"error": "model not provisioned for provider <provider>: <providerModelId>"}`.
-5. Resolve a `ProviderTransformer` for `provider` via `src/transformers/registry.ts`.
-6. The transformer builds the outbound request — for OpenRouter, that's `POST
+6. Resolve a `ProviderTransformer` for `provider` via `src/transformers/registry.ts`.
+7. The transformer builds the outbound request — for OpenRouter, that's `POST
 {baseUrl}/chat/completions` with the caller's body, `model` swapped for the resolved
    `providerModelId`, and (if the provider declares one) `Authorization: Bearer` attached from
    the gateway's own environment. If building the request fails (e.g. a missing API key), that's
    caught, logged to Postgres as a `status: 'error'` row, and returned as a `500` — never an
-   unhandled crash.
-7. Send the request, capture wall-clock latency.
-8. On success, `parseResponse` validates the response shape and explicitly extracts the `usage`
+   unhandled crash. The transformer only ever receives the parsed body — never the attribution
+   headers — so attribution data cannot reach the provider even by accident.
+8. Send the request, capture wall-clock latency.
+9. On success, `parseResponse` validates the response shape and explicitly extracts the `usage`
    object for logging, rather than re-serializing the upstream body blindly.
-9. **Before responding to the caller**, insert one row into the `requests` table — full request,
-   full response (or error), and every usage/cost field available.
-10. Return the (still OpenAI-shaped) response to the caller with the original upstream status
+10. **Before responding to the caller**, insert one row into the `requests` table — full request,
+    full response (or error), every usage/cost field available, and the attribution values from
+    step 1.
+11. Return the (still OpenAI-shaped) response to the caller with the original upstream status
     code.
-11. On any failure (network error, non-2xx upstream, invalid response shape), a row is still
+12. On any failure (network error, non-2xx upstream, invalid response shape), a row is still
     logged with `status = 'error'` and the error message. A logging failure itself never crashes
     the request handler — it's caught and printed to server logs so it's at least visible
     operationally.
@@ -69,6 +75,7 @@ src/
     providerModelMap.ts       Loads/validates config/providerModelMap.json
   routes/
     chatCompletions.ts        POST /v1/chat/completions handler
+    health.ts                  GET /health handler
   transformers/
     types.ts                  ProviderTransformer interface
     openrouter.ts              OpenRouterTransformer implementation
@@ -76,8 +83,11 @@ src/
   db/
     pool.ts                    pg Pool, built from PG* env vars
     logRequest.ts               insert one row per request/response
+  logging/
+    auditLog.ts                 optional file-based audit log (Winston, size-rotated)
   schemas/
     chatCompletionRequest.ts    Zod schema for the inbound OpenAI-shaped body
+    attribution.ts               Zod schema for the optional attribution headers
 config/
   providers.json                which providers are provisioned
   providerModelMap.json         which model IDs are provisioned per provider
@@ -87,16 +97,19 @@ scripts/
 
 ## Environment variables
 
-| Variable             | Required at boot?               | Purpose                                                                        |
-| -------------------- | ------------------------------- | ------------------------------------------------------------------------------ |
-| `PGUSER`             | Yes                             | Postgres username                                                              |
-| `PGHOST`             | Yes                             | Postgres host                                                                  |
-| `PGDATABASE`         | Yes                             | Postgres database name                                                         |
-| `PGPASSWORD`         | Yes                             | Postgres password                                                              |
-| `PGPORT`             | Yes                             | Postgres port (default `5432`)                                                 |
-| `PORT`               | Yes                             | Gateway HTTP port (default `8787`)                                             |
-| `NODE_ENV`           | Yes (defaults to `development`) | `development` \| `production` \| `test`                                        |
-| `OPENROUTER_API_KEY` | No — checked per-provider       | OpenRouter API key. Only needed if you actually call the `openrouter` provider |
+| Variable               | Required at boot?               | Purpose                                                                                       |
+| ---------------------- | ------------------------------- | --------------------------------------------------------------------------------------------- |
+| `PGUSER`               | Yes                             | Postgres username                                                                             |
+| `PGHOST`               | Yes                             | Postgres host                                                                                 |
+| `PGDATABASE`           | Yes                             | Postgres database name                                                                        |
+| `PGPASSWORD`           | Yes                             | Postgres password                                                                             |
+| `PGPORT`               | Yes                             | Postgres port (default `5432`)                                                                |
+| `PORT`                 | Yes                             | Gateway HTTP port (default `8787`)                                                            |
+| `NODE_ENV`             | Yes (defaults to `development`) | `development` \| `production` \| `test`                                                       |
+| `OPENROUTER_API_KEY`   | No — checked per-provider       | OpenRouter API key. Only needed if you actually call the `openrouter` provider                |
+| `FILE_LOGGING_ENABLED` | No (defaults to `false`)        | Turns on the file-based audit log — see [File-based audit logging](#file-based-audit-logging) |
+| `LOG_DIR`              | No (defaults to `./logs`)       | Directory the audit log file is written to (only used if enabled)                             |
+| `LOG_MAX_SIZE`         | No (defaults to `10m`)          | Rotation threshold, e.g. `10m`, `500k`, `1g` (only used if enabled)                           |
 
 `PGUSER`/`PGHOST`/`PGDATABASE`/`PGPASSWORD`/`PGPORT`/`PORT`/`NODE_ENV` are validated with Zod
 once at startup (`src/config/env.ts`). If any are missing or invalid, the process prints exactly
@@ -198,12 +211,29 @@ CREATE TABLE IF NOT EXISTS requests (
   reasoning_tokens      INTEGER,
   cost                  NUMERIC(12, 6),     -- OpenRouter's own reported cost, in credits
   upstream_inference_cost NUMERIC(12, 6),   -- from usage.cost_details.upstream_inference_cost
-  latency_ms            INTEGER NOT NULL
+  latency_ms            INTEGER NOT NULL,
+  region_id             TEXT,               -- optional attribution, see below
+  environment           TEXT,
+  tenant_id             TEXT,
+  application_id        TEXT,
+  module_id             TEXT,
+  process_or_user_id    TEXT,
+  transaction_id        TEXT,
+  request_id             UUID          -- shared correlation ID with the audit log file
 );
 
 CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests (created_at);
 CREATE INDEX IF NOT EXISTS idx_requests_provider_model ON requests (provider, resolved_model_id);
+CREATE INDEX IF NOT EXISTS idx_requests_tenant_id ON requests (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_requests_application_id ON requests (application_id);
+CREATE INDEX IF NOT EXISTS idx_requests_tenant_app ON requests (tenant_id, application_id);
+CREATE INDEX IF NOT EXISTS idx_requests_transaction_id ON requests (transaction_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_request_id ON requests (request_id);
 ```
+
+`npm run setup-db` is idempotent and safe to re-run against an existing database — it also issues
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for each attribution column, so upgrading an
+already-running deployment just means running it again.
 
 `src/db/logRequest.ts` accepts a typed object covering every column above and performs the
 insert — called from the route handler on both the success and every failure path. It never
@@ -218,6 +248,134 @@ WHERE created_at > now() - interval '24 hours'
 GROUP BY resolved_model_id
 ORDER BY total_cost DESC;
 ```
+
+## Attribution headers
+
+Optional cost-attribution metadata a caller can send alongside a request. Captured in the
+`requests` table for later filtering/dashboarding; **never forwarded to the LLM provider.**
+
+| Header                        | DB column            | Description                                 | Example                                                  |
+| ----------------------------- | -------------------- | ------------------------------------------- | -------------------------------------------------------- |
+| `AiFinOps-Region-Id`          | `region_id`          | Geographic or cloud infrastructure zone     | `us-east-1`, `eu-west-2`, `local`                        |
+| `AiFinOps-Environment`        | `environment`        | Deployment stage                            | `production`, `staging`, `development`                   |
+| `AiFinOps-Tenant-Id`          | `tenant_id`          | Client or organization account              | `tenant_enterprise_apple`, `tenant_free_user_12`         |
+| `AiFinOps-Application-Id`     | `application_id`     | Macro-level software application or service | `e-commerce-api`, `customer-portal`, `analytics-worker`  |
+| `AiFinOps-Module-Id`          | `module_id`          | Sub-system or component within the app      | `auth-engine`, `payment-gateway`, `billing`, `inventory` |
+| `AiFinOps-Process-Or-User-Id` | `process_or_user_id` | System process ID or the active user ID     | `usr_98234` or `pid_4412`                                |
+| `AiFinOps-Transaction-Id`     | `transaction_id`     | Unique trace ID for one request workflow    | `tx_abc123xyz789`                                        |
+
+All optional, all free-form strings capped at 255 characters (`src/schemas/attribution.ts`); an
+oversized value is rejected with a `400` before anything else runs — no fixed vocabulary is
+enforced, values are entirely caller-defined.
+
+Conceptually, these nest (documentation only — not enforced via foreign keys or a hierarchy
+table in the schema):
+
+```
+[Level 1: Global Scope]      Infrastructure (RegionId)
+                                     │
+[Level 2: Stage Scope]       Environment
+                                     │
+[Level 3: Client Scope]      Tenant / Organization (TenantId)
+                                     │
+[Level 4: System Scope]      Application (ApplicationId)
+                                     │
+[Level 5: Component Scope]   Sub-System (ModuleId)
+                                     │
+[Level 6: Context Scope]     Actor / Executor (ProcessOrUserId)
+                                     │
+[Level 7: Runtime Scope]     Execution Path (TransactionId)
+```
+
+**Why headers, not a body field:** `transformer.buildRequest()` only ever receives the parsed
+OpenAI-shaped body, never `request.headers` — so attribution data cannot reach the provider by
+construction, not because of a "strip this field before forwarding" step that a future refactor
+could accidentally break.
+
+**Indexing:** `tenant_id`, `application_id`, their combination, and `transaction_id` are indexed
+up front, since they map directly to the attribution questions already in the README ("cost by
+tenant/app," "total cost of one workflow"). `region_id`/`environment`/`module_id`/
+`process_or_user_id` are left unindexed until real dashboard query patterns justify the
+write-cost of an index on every insert.
+
+## File-based audit logging
+
+Postgres (`requests` table) is the "must have" record and is always on. File-based audit
+logging is a **supplemental, opt-in** sink for enterprises that consume logs via a SIEM (Splunk,
+etc.) tailing a rotating file — off by default, controlled entirely by env vars
+(`FILE_LOGGING_ENABLED`, `LOG_DIR`, `LOG_MAX_SIZE`; see [Environment
+variables](#environment-variables)). Implementation: `src/logging/auditLog.ts`.
+
+**One JSON line per call**, not four separate lines for received/forwarded/response/returned —
+splitting those apart would force whoever's reading the file (human or SIEM correlation rule) to
+reassemble a single call from multiple physically separate lines, which gets genuinely ambiguous
+once concurrent or identical-looking calls are in the file at once. Instead, the whole lifecycle
+is one record:
+
+```json
+{
+  "requestId": "1da2db2c-ef18-44e9-89fa-8dfe2cf2b292",
+  "provider": "openrouter",
+  "requestedModel": "openrouter/openai/gpt-4o-mini",
+  "resolvedModelId": "openai/gpt-4o-mini",
+  "status": "success",
+  "httpStatusCode": 200,
+  "errorMessage": null,
+  "latencyMs": 632,
+  "attribution": { "tenantId": "tenant_enterprise_apple", "...": "..." },
+  "usage": { "promptTokens": 13, "completionTokens": 9, "cost": 0.00000735, "...": "..." },
+  "callerRequest": { "model": "openrouter/openai/gpt-4o-mini", "messages": ["..."] },
+  "providerRequest": { "model": "openai/gpt-4o-mini", "messages": ["..."] },
+  "providerResponse": { "...": "the raw response from OpenRouter" },
+  "callerResponse": { "...": "what was actually sent back to the caller" }
+}
+```
+
+`providerResponse` and `callerResponse` are identical in v1 (responses are passed through
+unmodified) but kept as distinct fields deliberately — they won't necessarily stay identical
+once response transformation, streaming, or cross-provider normalization exist, and the schema
+shouldn't need to change shape when that happens.
+
+**The shared `requestId`.** Fastify's `genReqId` is overridden in `server.ts` to generate a real
+UUID (`crypto.randomUUID()`) instead of Fastify's default per-process counter (`req-1`, `req-2`,
+...) — which isn't safe to correlate with anyway, since it resets on every restart and would
+collide across multiple gateway instances behind a load balancer. That UUID is the _same_ value
+in three places for one call: Fastify's own Pino request logs, this audit log entry, and the
+`request_id` column on the corresponding Postgres row (unique-indexed) — so any of the three can
+be used to pivot into the other two.
+
+**Rotation:** pure size-based, via Winston's built-in `File` transport `maxsize` option (not the
+`winston-daily-rotate-file` package, which bundles in date-based rotation whether you want it or
+not) — `LOG_MAX_SIZE` (default `10m`) is parsed from a human-readable size string into bytes.
+When exceeded, Winston opens a new numbered file (`aifinops-audit.log` → `aifinops-audit1.log` →
+`aifinops-audit2.log` → ...). **Retention is deliberately uncapped** — no `maxFiles` is set, so
+rotated files accumulate forever; that's a product decision, not an oversight, so plan disk
+capacity accordingly if you enable this in a long-running deployment.
+
+**Failure contract:** `logAudit()` never throws — a write failure is caught and printed to
+server logs, exactly like `logRequest()`'s contract for Postgres. Unlike the Postgres insert
+(which is `await`ed before the caller gets a response, so the row is guaranteed to exist first),
+Winston's own API is fire-and-forget from the caller's side — the write itself still happens
+asynchronously under the hood.
+
+## Health endpoint
+
+`GET /health` — no auth, safe to expose publicly, reports no secrets or business data:
+
+```json
+{
+  "status": "ok",
+  "version": "0.1.1",
+  "uptimeSeconds": 3421,
+  "database": "reachable",
+  "providers": { "openrouter": "ready" }
+}
+```
+
+Returns `200` if Postgres is reachable (re-running the same `SELECT 1` check used at boot),
+`503` otherwise. `providers` reflects `getProviderReadiness()` per provider in
+`config/providers.json` — informational only, it does not affect the status code or HTTP status.
+Implementation: `src/routes/health.ts`.
 
 ## Extending AiFinOps — adding a new provider
 

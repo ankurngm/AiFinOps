@@ -36,8 +36,9 @@ out and it's a `400`, no matter what the provider itself would accept:
 "openrouter": ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"]
 ```
 
-**v1 ships today:** full request-level cost logging for OpenRouter. **Next up:** rolling that up
-by team/user/tenant and a usage dashboard — see [Roadmap](#roadmap) below.
+**v1 ships today:** full request-level cost logging for OpenRouter, with optional attribution
+tags (tenant, application, module, user, transaction, region, environment) captured on every
+call. **Next up:** rolling that up into a usage dashboard — see [Roadmap](#roadmap) below.
 
 → For exactly how requests are validated, routed, and logged, see
 [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -97,6 +98,33 @@ of this additive, not a rewrite.
 
 All notable changes to this project are documented here. Dates are in `YYYY-MM-DD` format.
 
+### 0.1.1 — 2026-08-23
+
+- Licensed under [Elastic License 2.0](LICENSE), plus a supplemental attribution term — free for
+  personal, commercial, and enterprise use and modification, with restrictions on (a) offering
+  it as a hosted/managed service to third parties, and (b) redistributing without a visible
+  attribution link back to the original repository.
+- Added a license header to every source file (`src/`, `scripts/`, `eslint.config.js`).
+- Added a `GET /health` endpoint — reports overall status, app version, uptime, Postgres
+  reachability (`200`/`503`), and per-provider readiness. Safe to expose without inbound auth;
+  reports no secrets or business data.
+- Added optional cost-attribution headers (`AiFinOps-Region-Id`, `-Environment`, `-Tenant-Id`,
+  `-Application-Id`, `-Module-Id`, `-Process-Or-User-Id`, `-Transaction-Id`) — captured in the
+  `requests` table for future dashboard filtering, never forwarded to the LLM provider. See
+  [ARCHITECTURE.md](ARCHITECTURE.md#attribution-headers) for the full field reference.
+- Added Node.js usage examples under [`examples/nodejs/`](examples/nodejs) — basic call,
+  call with attribution, calling an unprovisioned model (shows the compliance gate), and using
+  the official `openai` SDK against AiFinOps via `baseURL`.
+- Added curl usage examples under [`examples/curl/`](examples/curl) — basic call, call with
+  attribution, and calling an unprovisioned model (shows the compliance gate).
+- Added optional file-based audit logging (`FILE_LOGGING_ENABLED`, off by default) — one JSON
+  line per call (caller request, what was forwarded to the provider, the provider's response,
+  and what was sent back to the caller), size-rotated via `LOG_MAX_SIZE` (default `10m`),
+  retention deliberately uncapped. Every request now gets a real UUID (`request.id`), shared
+  across Fastify's own logs, the audit log file, and a new `request_id` column in Postgres, so
+  any of the three can be used to find the others. Postgres logging is unaffected either way.
+  See [ARCHITECTURE.md](ARCHITECTURE.md#file-based-audit-logging) for the full design.
+
 ### 0.1.0 — 2026-08-19
 
 Initial release.
@@ -113,3 +141,15 @@ Initial release.
 
 For the full technical reference — architecture diagram, request flow, environment variables,
 database schema, and how to add a new provider — see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
+## License
+
+AiFinOps is licensed under the [Elastic License 2.0](LICENSE), plus one supplemental term. You're
+free to use, modify, and redistribute it — including for commercial and enterprise purposes —
+with two conditions: you may not offer it, or a modified version of it, to third parties as a
+hosted or managed service; and any redistribution must include a visible attribution link back
+to [github.com/ankurngm/AiFinOps](https://github.com/ankurngm/AiFinOps).
+
+## Author
+
+Created by [Ankur Nigam](https://www.linkedin.com/in/ankurnigam/).

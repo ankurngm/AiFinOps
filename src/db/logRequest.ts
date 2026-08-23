@@ -1,8 +1,16 @@
+/**
+ * Copyright (C) 2026 Ankur Nigam
+ * Licensed under the Elastic License 2.0, plus a supplemental attribution term.
+ * See the LICENSE file in the project root for full terms.
+ * https://github.com/ankurngm/AiFinOps
+ */
+
 import type { Pool } from 'pg';
 
 export type RequestStatus = 'success' | 'error';
 
 export interface RequestLogEntry {
+  requestId: string;
   provider: string;
   requestedModel: string;
   resolvedModelId: string;
@@ -20,6 +28,13 @@ export interface RequestLogEntry {
   cost: number | null;
   upstreamInferenceCost: number | null;
   latencyMs: number;
+  regionId: string | null;
+  environment: string | null;
+  tenantId: string | null;
+  applicationId: string | null;
+  moduleId: string | null;
+  processOrUserId: string | null;
+  transactionId: string | null;
 }
 
 const INSERT_SQL = `
@@ -40,9 +55,18 @@ const INSERT_SQL = `
     reasoning_tokens,
     cost,
     upstream_inference_cost,
-    latency_ms
+    latency_ms,
+    region_id,
+    environment,
+    tenant_id,
+    application_id,
+    module_id,
+    process_or_user_id,
+    transaction_id,
+    request_id
   ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+    $18, $19, $20, $21, $22, $23, $24, $25
   )
 `;
 
@@ -71,6 +95,14 @@ export async function logRequest(pool: Pool, entry: RequestLogEntry): Promise<vo
       entry.cost,
       entry.upstreamInferenceCost,
       entry.latencyMs,
+      entry.regionId,
+      entry.environment,
+      entry.tenantId,
+      entry.applicationId,
+      entry.moduleId,
+      entry.processOrUserId,
+      entry.transactionId,
+      entry.requestId,
     ]);
   } catch (err) {
     console.error('❌ Failed to write request log to database:', err);
