@@ -98,32 +98,8 @@ of this additive, not a rewrite.
 
 All notable changes to this project are documented here. Dates are in `YYYY-MM-DD` format.
 
-### 0.1.1 — 2026-08-19
+### 0.1.1 — 2026-08-30
 
-- Licensed under [Elastic License 2.0](LICENSE), plus a supplemental attribution term — free for
-  personal, commercial, and enterprise use and modification, with restrictions on (a) offering
-  it as a hosted/managed service to third parties, and (b) redistributing without a visible
-  attribution link back to the original repository.
-- Added a license header to every source file (`src/`, `scripts/`, `eslint.config.js`).
-- Added a `GET /health` endpoint — reports overall status, app version, uptime, Postgres
-  reachability (`200`/`503`), and per-provider readiness. Safe to expose without inbound auth;
-  reports no secrets or business data.
-- Added optional cost-attribution headers (`AiFinOps-Region-Id`, `-Environment`, `-Tenant-Id`,
-  `-Application-Id`, `-Module-Id`, `-Process-Or-User-Id`, `-Transaction-Id`) — captured in the
-  `requests` table for future dashboard filtering, never forwarded to the LLM provider. See
-  [ARCHITECTURE.md](ARCHITECTURE.md#attribution-headers) for the full field reference.
-- Added Node.js usage examples under [`examples/nodejs/`](examples/nodejs) — basic call,
-  call with attribution, calling an unprovisioned model (shows the compliance gate), and using
-  the official `openai` SDK against AiFinOps via `baseURL`.
-- Added curl usage examples under [`examples/curl/`](examples/curl) — basic call, call with
-  attribution, and calling an unprovisioned model (shows the compliance gate).
-- Added optional file-based audit logging (`FILE_LOGGING_ENABLED`, off by default) — one JSON
-  line per call (caller request, what was forwarded to the provider, the provider's response,
-  and what was sent back to the caller), size-rotated via `LOG_MAX_SIZE` (default `10m`),
-  retention deliberately uncapped. Every request now gets a real UUID (`request.id`), shared
-  across Fastify's own logs, the audit log file, and a new `request_id` column in Postgres, so
-  any of the three can be used to find the others. Postgres logging is unaffected either way.
-  See [ARCHITECTURE.md](ARCHITECTURE.md#file-based-audit-logging) for the full design.
 - Added Ollama support (`OllamaTransformer`, via Ollama's OpenAI-compatible endpoint) — Supporting local models.
 - Added dated, per-token model pricing (`config/modelPricing.json`) for providers that don't
   self-report cost. Provisioning and pricing are independent gates — an approved-but-unpriced
@@ -153,6 +129,33 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
   (plain `fetch`), `examples/nodejs/ollama-using-openai-sdk-with-attribution.js` (`openai` SDK),
   and `examples/curl/ollama-chat-completion-with-attribution.sh` — all free, since they call a
   local model priced at `$0`.
+
+### 0.1.1 — 2026-08-23
+
+- Licensed under [Elastic License 2.0](LICENSE), plus a supplemental attribution term — free for
+  personal, commercial, and enterprise use and modification, with restrictions on (a) offering
+  it as a hosted/managed service to third parties, and (b) redistributing without a visible
+  attribution link back to the original repository.
+- Added a license header to every source file (`src/`, `scripts/`, `eslint.config.js`).
+- Added a `GET /health` endpoint — reports overall status, app version, uptime, Postgres
+  reachability (`200`/`503`), and per-provider readiness. Safe to expose without inbound auth;
+  reports no secrets or business data.
+- Added optional cost-attribution headers (`AiFinOps-Region-Id`, `-Environment`, `-Tenant-Id`,
+  `-Application-Id`, `-Module-Id`, `-Process-Or-User-Id`, `-Transaction-Id`) — captured in the
+  `requests` table for future dashboard filtering, never forwarded to the LLM provider. See
+  [ARCHITECTURE.md](ARCHITECTURE.md#attribution-headers) for the full field reference.
+- Added Node.js usage examples under [`examples/nodejs/`](examples/nodejs) — basic call,
+  call with attribution, calling an unprovisioned model (shows the compliance gate), and using
+  the official `openai` SDK against AiFinOps via `baseURL`.
+- Added curl usage examples under [`examples/curl/`](examples/curl) — basic call, call with
+  attribution, and calling an unprovisioned model (shows the compliance gate).
+- Added optional file-based audit logging (`FILE_LOGGING_ENABLED`, off by default) — one JSON
+  line per call (caller request, what was forwarded to the provider, the provider's response,
+  and what was sent back to the caller), size-rotated via `LOG_MAX_SIZE` (default `10m`),
+  retention deliberately uncapped. Every request now gets a real UUID (`request.id`), shared
+  across Fastify's own logs, the audit log file, and a new `request_id` column in Postgres, so
+  any of the three can be used to find the others. Postgres logging is unaffected either way.
+  See [ARCHITECTURE.md](ARCHITECTURE.md#file-based-audit-logging) for the full design.
 
 ### 0.1.0 — 2026-08-19
 
