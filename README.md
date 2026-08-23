@@ -98,7 +98,7 @@ of this additive, not a rewrite.
 
 All notable changes to this project are documented here. Dates are in `YYYY-MM-DD` format.
 
-### 0.1.1 — 2026-08-19
+### 0.1.1 — 2026-08-23
 
 - Licensed under [Elastic License 2.0](LICENSE), plus a supplemental attribution term — free for
   personal, commercial, and enterprise use and modification, with restrictions on (a) offering
