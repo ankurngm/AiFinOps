@@ -100,74 +100,35 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
 
 ### 0.1.2 — 2026-08-30
 
-- Added Ollama support (`OllamaTransformer`, via Ollama's OpenAI-compatible endpoint) — Supporting local models.
-- Added dated, per-token model pricing (`config/modelPricing.json`) for providers that don't
-  self-report cost. Provisioning and pricing are independent gates — an approved-but-unpriced
-  model still processes normally, with `cost` logged as `NULL`, never blocked. Boot-time,
-  non-fatal visibility into pricing gaps via each provider's `requiresPricingCheck` flag. See
-  [ARCHITECTURE.md](ARCHITECTURE.md#model-pricing) for the full design.
-- Added a `"*"` wildcard fallback in `modelPricing.json` — a provider-level default rate used
-  when a model has **no pricing history at all**, so a provider where most models are free
-  (Ollama) doesn't need an identical rate repeated for every one of them. A model with its own
-  entry never falls back to `"*"`, even if every record under it has expired — an all-expired
-  history means someone forgot to add the next record, and that's meant to surface as `NULL`
-  (and a boot-time warning), not be silently masked by the wildcard rate.
-- `config/modelPricing.json`'s shipped default now uses that wildcard — `ollama: { "*": [{ ...,
-"inputPerMillion": 0, "outputPerMillion": 0 }] }` — instead of a model-specific entry, so any
-  approved local Ollama model is `$0` by default without needing its own record.
-- Documented (and named explicitly in code — `utcDateString()`, not the previous unlabeled
-  `isoDate()`) that pricing `startDate`/`endDate` transitions happen at UTC midnight, not the
-  server's local time — a real, previously-unstated gap where a date could take effect up to
-  half a day off from what an operator typing that date actually intended.
-- Extracted the identical `buildRequest` logic shared by `OpenRouterTransformer` and
-  `OllamaTransformer` into a new `OpenAICompatibleTransformer` base class
-  (`src/transformers/openAICompatibleTransformer.ts`). `parseResponse` stays per-provider, since
-  response shape genuinely differs — only the part that was byte-for-byte duplicated moved.
-  No behavior change; verified with the full regression suite (both providers' real calls,
-  attribution, the missing-key error path end-to-end, rejected-model handling, `/health`).
-- Added Ollama + attribution usage examples: `examples/nodejs/ollama-chat-completion-with-attribution.js`
-  (plain `fetch`), `examples/nodejs/ollama-using-openai-sdk-with-attribution.js` (`openai` SDK),
-  and `examples/curl/ollama-chat-completion-with-attribution.sh` — all free, since they call a
-  local model priced at `$0`.
+- **Ollama support** — run models locally, or via Ollama Cloud.
+- **New runnable examples** showing cost attribution against a free local model, in both Node.js
+  and curl.
+- **Bring your own negotiated pricing for exact cost visibility.** Supports, if your enterprise has
+  negotiated custom or discounted rates with a provider — including separate rates for
+  cached-token discounts and cache-write costs.
 
 ### 0.1.1 — 2026-08-23
 
-- Licensed under [Elastic License 2.0](LICENSE), plus a supplemental attribution term — free for
-  personal, commercial, and enterprise use and modification, with restrictions on (a) offering
-  it as a hosted/managed service to third parties, and (b) redistributing without a visible
-  attribution link back to the original repository.
-- Added a license header to every source file (`src/`, `scripts/`, `eslint.config.js`).
-- Added a `GET /health` endpoint — reports overall status, app version, uptime, Postgres
-  reachability (`200`/`503`), and per-provider readiness. Safe to expose without inbound auth;
-  reports no secrets or business data.
-- Added optional cost-attribution headers (`AiFinOps-Region-Id`, `-Environment`, `-Tenant-Id`,
-  `-Application-Id`, `-Module-Id`, `-Process-Or-User-Id`, `-Transaction-Id`) — captured in the
-  `requests` table for future dashboard filtering, never forwarded to the LLM provider. See
-  [ARCHITECTURE.md](ARCHITECTURE.md#attribution-headers) for the full field reference.
-- Added Node.js usage examples under [`examples/nodejs/`](examples/nodejs) — basic call,
-  call with attribution, calling an unprovisioned model (shows the compliance gate), and using
-  the official `openai` SDK against AiFinOps via `baseURL`.
-- Added curl usage examples under [`examples/curl/`](examples/curl) — basic call, call with
-  attribution, and calling an unprovisioned model (shows the compliance gate).
-- Added optional file-based audit logging (`FILE_LOGGING_ENABLED`, off by default) — one JSON
-  line per call (caller request, what was forwarded to the provider, the provider's response,
-  and what was sent back to the caller), size-rotated via `LOG_MAX_SIZE` (default `10m`),
-  retention deliberately uncapped. Every request now gets a real UUID (`request.id`), shared
-  across Fastify's own logs, the audit log file, and a new `request_id` column in Postgres, so
-  any of the three can be used to find the others. Postgres logging is unaffected either way.
-  See [ARCHITECTURE.md](ARCHITECTURE.md#file-based-audit-logging) for the full design.
+- **Licensing clarified** — [Elastic License 2.0](LICENSE) plus an attribution requirement: free
+  to use, modify, and redistribute for personal, commercial, or enterprise purposes.
+- **A health check endpoint** — a safe, no-auth-required way to monitor whether the gateway and
+  its database are up, suitable for load balancers and uptime monitoring.
+- **Cost attribution tagging** — tag every call with your own business context (tenant,
+  application, team, user, region, environment, transaction), so spend can be broken down by
+  who's actually driving it, without any of that data ever reaching the LLM provider. See
+  [ARCHITECTURE.md](ARCHITECTURE.md#attribution-headers).
+- **Runnable examples** in Node.js and curl — a real call, a call tagged with attribution, and
+  what happens when an unapproved model is requested.
+- **Enterprise-grade audit logging** — an optional, file-based audit trail suitable for
+  ingestion into a SIEM like Splunk, with every entry traceable back to the same request across
+  logs and the database.
 
 ### 0.1.0 — 2026-08-19
 
-Initial release.
-
-- OpenAI-compatible `POST /v1/chat/completions` endpoint.
-- OpenRouter provider support via the `ProviderTransformer` interface.
-- Provider/model allow-list gate (`config/providers.json`,
-  `config/providerModelMap.json`) as a preventive cost-control mechanism.
-- Full request/response/cost logging to Postgres (`requests` table), success or failure.
-- Zod-validated environment configuration with fail-fast startup checks.
-- Postgres connectivity check (`SELECT 1`) before accepting HTTP traffic.
+Initial release — an OpenAI-compatible gateway to OpenRouter, with a compliance-gated allow-list
+of approved providers and models, full request/response/cost logging to Postgres for every call,
+and fail-fast startup checks so misconfiguration is caught immediately rather than in
+production.
 
 ---
 
