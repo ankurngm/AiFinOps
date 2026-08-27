@@ -9,5 +9,11 @@
     "displayName": "Ollama",
     "baseUrl": "http://localhost:11434/v1",
     "requiresPricingCheck": false
+  },
+  "openai": {
+    "displayName": "OpenAI",
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKeyEnvVar": "OPENAI_API_KEY",
+    "requiresPricingCheck": true
   }
 }

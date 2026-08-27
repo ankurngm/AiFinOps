@@ -82,6 +82,7 @@ src/
     openAICompatibleTransformer.ts  shared base: buildRequest for any OpenAI-compatible provider
     openrouter.ts              OpenRouterTransformer implementation
     ollama.ts                   OllamaTransformer implementation
+    openai.ts                   OpenAITransformer implementation
     registry.ts                   provider name -> transformer instance lookup
   db/
     pool.ts                    pg Pool, built from PG* env vars
@@ -111,6 +112,7 @@ scripts/
 | `PORT`                 | Yes                             | Gateway HTTP port (default `8787`)                                                            |
 | `NODE_ENV`             | Yes (defaults to `development`) | `development` \| `production` \| `test`                                                       |
 | `OPENROUTER_API_KEY`   | No — checked per-provider       | OpenRouter API key. Only needed if you actually call the `openrouter` provider                |
+| `OPENAI_API_KEY`       | No — checked per-provider       | OpenAI API key. Only needed if you actually call the `openai` provider                        |
 | `FILE_LOGGING_ENABLED` | No (defaults to `false`)        | Turns on the file-based audit log — see [File-based audit logging](#file-based-audit-logging) |
 | `LOG_DIR`              | No (defaults to `./logs`)       | Directory the audit log file is written to (only used if enabled)                             |
 | `LOG_MAX_SIZE`         | No (defaults to `10m`)          | Rotation threshold, e.g. `10m`, `500k`, `1g` (only used if enabled)                           |
@@ -155,6 +157,12 @@ rejected with a `400` even if the upstream provider would happily serve it.
     "displayName": "Ollama",
     "baseUrl": "http://localhost:11434/v1",
     "requiresPricingCheck": false
+  },
+  "openai": {
+    "displayName": "OpenAI",
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKeyEnvVar": "OPENAI_API_KEY",
+    "requiresPricingCheck": true
   }
 }
 ```
@@ -162,17 +170,21 @@ rejected with a `400` even if the upstream provider would happily serve it.
 `apiKeyEnvVar` is optional — omit it for a keyless/local provider and no `Authorization` header
 is ever attached for it. `requiresPricingCheck` controls the boot-time pricing check described
 in [Model pricing](#model-pricing) below — set explicitly to `false` for a provider that
-self-reports cost (OpenRouter) or is a known-free default (Ollama's local models); omit it
-entirely to fail toward "check and warn."
+self-reports cost (OpenRouter) or is a known-free default (Ollama's local models); set it to
+`true` (or omit it, since that's the default) for a provider that's billed but doesn't self-report
+cost, like OpenAI, so a model added without a matching `modelPricing.json` entry doesn't go
+silently unpriced.
 
 **`config/providerModelMap.json`** — which model IDs are allowed per provider, using each
 provider's own native model naming (for OpenRouter, its `vendor/model` IDs; for Ollama, its own
-model tags, with Ollama Cloud models carrying a `:cloud` suffix, e.g. `"gpt-oss:120b-cloud"`):
+model tags, with Ollama Cloud models carrying a `:cloud` suffix, e.g. `"gpt-oss:120b-cloud"`; for
+OpenAI, its own model IDs):
 
 ```json
 {
   "openrouter": ["openai/gpt-4o", "openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
-  "ollama": ["llama3.2:3b"]
+  "ollama": ["llama3.2:3b"],
+  "openai": ["gpt-5", "gpt-5-mini", "gpt-4o", "gpt-4o-mini"]
 }
 ```
 
@@ -197,8 +209,8 @@ slashes — is passed through as-is to the provider).
 ## Model pricing
 
 Some providers report cost directly in their response (OpenRouter). Others — Ollama, whether
-local or a `:cloud`-suffixed model — only report token counts, never a price. For those,
-`config/modelPricing.json` supplies per-token rates, keyed by `(provider, model)`:
+local or a `:cloud`-suffixed model, and OpenAI — only report token counts, never a price. For
+those, `config/modelPricing.json` supplies per-token rates, keyed by `(provider, model)`:
 
 ```json
 {
@@ -480,7 +492,7 @@ asynchronously under the hood.
 ```json
 {
   "status": "ok",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "uptimeSeconds": 3421,
   "database": "reachable",
   "providers": { "openrouter": "ready" }
@@ -512,8 +524,9 @@ for logging.
 {baseUrl}/chat/completions`, an optional Bearer-token `Authorization` header, `model` as a plain
 field — extend `OpenAICompatibleTransformer` (`src/transformers/openAICompatibleTransformer.ts`)
 instead of implementing `ProviderTransformer` directly. It supplies `buildRequest` for you (used
-unmodified by both `OpenRouterTransformer` and `OllamaTransformer` today — not a hypothetical,
-it's identical code that used to be duplicated in both files); you only write `providerName` and
+unmodified by `OpenRouterTransformer`, `OllamaTransformer`, and `OpenAITransformer` today — not a
+hypothetical, it's identical code that used to be duplicated across files); you only write
+`providerName` and
 `parseResponse`, since response shape is where providers actually differ. If a provider's request
 building deviates from that pattern (different auth header, different path), just override
 `buildRequest` in the subclass — normal inheritance, nothing special required.

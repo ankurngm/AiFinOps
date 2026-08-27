@@ -10,5 +10,107 @@
         "cacheWritePerMillion": null
       }
     ]
+  },
+  "openai": {
+    "gpt-5": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 1.25,
+        "outputPerMillion": 10.0,
+        "cachedInputPerMillion": 0.125,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "gpt-5-mini": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 0.25,
+        "outputPerMillion": 2.0,
+        "cachedInputPerMillion": 0.025,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "gpt-5-nano": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 0.05,
+        "outputPerMillion": 0.4,
+        "cachedInputPerMillion": 0.005,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "gpt-4.1": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 2.0,
+        "outputPerMillion": 8.0,
+        "cachedInputPerMillion": 0.5,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "gpt-4.1-mini": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 0.4,
+        "outputPerMillion": 1.6,
+        "cachedInputPerMillion": 0.1,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "gpt-4o": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 2.5,
+        "outputPerMillion": 10.0,
+        "cachedInputPerMillion": 1.25,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "gpt-4o-mini": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 0.15,
+        "outputPerMillion": 0.6,
+        "cachedInputPerMillion": 0.075,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "o3": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 2.0,
+        "outputPerMillion": 8.0,
+        "cachedInputPerMillion": 0.5,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "o4-mini": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 1.1,
+        "outputPerMillion": 4.4,
+        "cachedInputPerMillion": 0.275,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "gpt-3.5-turbo": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 1.5,
+        "cachedInputPerMillion": null,
+        "cacheWritePerMillion": null
+      }
+    ]
   }
 }

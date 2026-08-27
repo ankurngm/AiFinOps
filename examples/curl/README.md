@@ -8,7 +8,8 @@ at least one provider configured (see the root [README](../../README.md#-get-sta
 default these scripts point at `http://localhost:8787`; set the `AIFINOPS_URL` environment
 variable to point elsewhere. The `ollama-*` script additionally needs Ollama running locally
 with `llama3.2:3b` pulled (`ollama pull llama3.2:3b`) and provisioned in
-`config/providerModelMap.json`.
+`config/providerModelMap.json`. The `openai-*` script additionally needs `OPENAI_API_KEY` set in
+`.env`.
 
 | File                                         | What it shows                                                                         | Real cost?                        |
 | -------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------- |
@@ -16,6 +17,7 @@ with `llama3.2:3b` pulled (`ollama pull llama3.2:3b`) and provisioned in
 | `chat-completion-with-attribution.sh`        | Same call, tagged with all 7 `AiFinOps-*` attribution headers                         | Yes — a real OpenRouter call      |
 | `rejected-unprovisioned-model.sh`            | Calling a model not on the allow-list — shows the `400`, and that no cost is incurred | No — rejected before the provider |
 | `ollama-chat-completion-with-attribution.sh` | Same attribution call, but against a local Ollama model instead of OpenRouter         | No — Ollama is local/free         |
+| `openai-chat-completion-with-attribution.sh` | Same attribution call, but against OpenAI directly instead of via OpenRouter          | Yes — a real OpenAI call          |
 
 Make them executable once, then run directly:
 
@@ -31,6 +33,7 @@ bash basic-chat-completion.sh
 ```
 
 The OpenRouter scripts both use `openai/gpt-4o-mini`, so each run costs a small fraction of a
-cent — real spend on your OpenRouter account, not simulated. `ollama-chat-completion-with-attribution.sh`
-doesn't cost anything, since it calls a local model priced at `$0` by `config/modelPricing.json`'s
-wildcard entry.
+cent — real spend on your OpenRouter account, not simulated. `openai-chat-completion-with-attribution.sh`
+also uses `gpt-4o-mini`, this time billed directly to your OpenAI account.
+`ollama-chat-completion-with-attribution.sh` doesn't cost anything, since it calls a local model
+priced at `$0` by `config/modelPricing.json`'s wildcard entry.
