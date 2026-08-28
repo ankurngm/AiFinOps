@@ -40,11 +40,13 @@ async function main() {
     {
       model: 'anthropic/claude-haiku-4-5-20251001',
       messages: [{ role: 'user', content: 'Say hello in one sentence.' }],
-      // max_tokens is Anthropic-specific: the Messages API requires it on
-      // every call (OpenAI treats it as optional). AnthropicTransformer
-      // falls back to 4096 if you omit it — shown explicitly here so this
-      // example is self-documenting.
-      max_tokens: 300,
+      // max_tokens: optional — deliberately omitted here. Anthropic's own
+      // Messages API requires it on every call (unlike OpenAI, where it's
+      // optional upstream too), but AiFinOps doesn't make you know that: if
+      // none is provided, it defaults to 4096 for Anthropic (DEFAULT_MAX_TOKENS
+      // in src/transformers/anthropic.ts), so this call still succeeds. That's
+      // this example's whole point — an OpenAI SDK caller shouldn't have to
+      // know Anthropic even has this requirement.
       // temperature is optional and passed straight through to Anthropic
       // unmodified — AiFinOps doesn't validate whether a given model
       // accepts it. It works on claude-haiku-4-5-20251001 (used here); a
