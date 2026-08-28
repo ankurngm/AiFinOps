@@ -112,5 +112,77 @@
         "cacheWritePerMillion": null
       }
     ]
+  },
+  "anthropic": {
+    "claude-fable-5": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 10.0,
+        "outputPerMillion": 50.0,
+        "cachedInputPerMillion": 1.0,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "claude-opus-5": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 5.0,
+        "outputPerMillion": 25.0,
+        "cachedInputPerMillion": 0.5,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "claude-opus-4-8": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 5.0,
+        "outputPerMillion": 25.0,
+        "cachedInputPerMillion": 0.5,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "claude-sonnet-5": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 2.0,
+        "outputPerMillion": 10.0,
+        "cachedInputPerMillion": 0.2,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "claude-sonnet-4-6": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 3.0,
+        "outputPerMillion": 15.0,
+        "cachedInputPerMillion": 0.3,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "claude-sonnet-4-5-20250929": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 3.0,
+        "outputPerMillion": 15.0,
+        "cachedInputPerMillion": 0.3,
+        "cacheWritePerMillion": null
+      }
+    ],
+    "claude-haiku-4-5-20251001": [
+      {
+        "startDate": "2026-08-26",
+        "endDate": null,
+        "inputPerMillion": 1.0,
+        "outputPerMillion": 5.0,
+        "cachedInputPerMillion": 0.1,
+        "cacheWritePerMillion": null
+      }
+    ]
   }
 }

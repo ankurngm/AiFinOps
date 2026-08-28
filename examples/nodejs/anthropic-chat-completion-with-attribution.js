@@ -5,16 +5,15 @@
  * https://github.com/ankurngm/AiFinOps
  */
 
-// Calls OpenAI directly (not via OpenRouter) through AiFinOps, tagged with
-// all 7 AiFinOps-* attribution headers. Uses Node's built-in fetch — no
-// dependencies needed.
+// Calls Anthropic directly through AiFinOps, tagged with all 7 AiFinOps-*
+// attribution headers. Uses Node's built-in fetch — no dependencies needed.
 //
 // Prerequisite: the gateway must already be running (`npm run dev` from the
-// repo root), with OPENAI_API_KEY set in .env and "gpt-4o-mini" provisioned
-// in config/providerModelMap.json (it is, by default).
+// repo root), with ANTHROPIC_API_KEY set in .env and "claude-haiku-4-5-20251001"
+// provisioned in config/providerModelMap.json (it is, by default).
 //
-// Run: node openai-chat-completion-with-attribution.js
-// Real cost: yes — a real OpenAI call (fractions of a cent with gpt-4o-mini).
+// Run: node anthropic-chat-completion-with-attribution.js
+// Real cost: yes — a real Anthropic call (fractions of a cent with Haiku 4.5).
 
 const AIFINOPS_URL = process.env.AIFINOPS_URL ?? 'http://localhost:8787';
 
@@ -32,14 +31,22 @@ async function main() {
       'AiFinOps-Transaction-Id': 'tx_abc123xyz789',
     },
     body: JSON.stringify({
-      model: 'openai/gpt-4o-mini',
+      model: 'anthropic/claude-haiku-4-5-20251001',
       messages: [{ role: 'user', content: 'Say hello in one sentence.' }],
-      // temperature is optional and passed straight through to OpenAI
+      // max_tokens is Anthropic-specific: the Messages API requires it on
+      // every call (OpenAI treats it as optional). AnthropicTransformer
+      // falls back to 4096 if you omit it — shown explicitly here so this
+      // example is self-documenting.
+      max_tokens: 300,
+      // temperature is optional and passed straight through to Anthropic
       // unmodified — AiFinOps doesn't validate whether a given model
-      // accepts it. It works on gpt-4o-mini (used here) and OpenAI's other
-      // standard chat models; OpenAI's reasoning models (o3, o4-mini) are
-      // expected to reject a non-default temperature (or top_p) with an
-      // error from OpenAI itself.
+      // accepts it. It works on claude-haiku-4-5-20251001 (used here); a
+      // handful of newer Anthropic models (the Claude 4.7-and-later
+      // generation — Fable 5, Opus 5, Sonnet 5, Opus 4.8) reject a
+      // non-default temperature (or top_p) with an error from Anthropic
+      // itself. Any other optional Anthropic parameter — e.g. top_k — works
+      // the same way: forwarded as-is, and whether it's accepted is between
+      // you and Anthropic, not something this gateway decides.
       temperature: 0.7,
     }),
   });

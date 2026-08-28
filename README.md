@@ -46,12 +46,13 @@ call. **Next up:** rolling that up into a usage dashboard — see [Roadmap](#roa
 ## 🚀 Get Started
 
 Prerequisites: Node.js 20+, a running Postgres server, and an API key for at least one provider
-you plan to use (OpenRouter, OpenAI — Ollama needs no key at all).
+you plan to use (OpenRouter, OpenAI, Anthropic — Ollama needs no key at all).
 
 ```bash
 npm install
 cp .env.example .env
-# edit .env: fill in your Postgres credentials, plus OPENROUTER_API_KEY and/or OPENAI_API_KEY
+# edit .env: fill in your Postgres credentials, plus OPENROUTER_API_KEY, OPENAI_API_KEY,
+# and/or ANTHROPIC_API_KEY
 npm run setup-db
 npm run dev
 ```
@@ -101,12 +102,12 @@ All notable changes to this project are documented here. Dates are in `YYYY-MM-D
 
 ### 0.1.3 — 2026-09-06
 
-- **Native OpenAI support** — call OpenAI directly, no OpenRouter hop required, under the exact
-  same allow-list, logging, and attribution guarantees as every other provider.
-- **Built-in pricing for OpenAI's current model lineup** — cost is computed automatically from
-  published rates, no manual entry needed to get accurate spend data from day one.
-- **New runnable examples** showing cost attribution against OpenAI directly, in both Node.js and
-  curl.
+- **Native OpenAI and Anthropic support** — call either directly, no OpenRouter hop required,
+  under the exact same allow-list, logging, and attribution guarantees as every other provider.
+- **Built-in pricing for both providers' current model lineups** — cost is computed automatically
+  from published rates, no manual entry needed to get accurate spend data from day one.
+- **New runnable examples** showing cost attribution against OpenAI and Anthropic directly, in
+  both Node.js and curl.
 
 ### 0.1.2 — 2026-08-30
 

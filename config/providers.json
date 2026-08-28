@@ -15,5 +15,11 @@
     "baseUrl": "https://api.openai.com/v1",
     "apiKeyEnvVar": "OPENAI_API_KEY",
     "requiresPricingCheck": true
+  },
+  "anthropic": {
+    "displayName": "Anthropic",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKeyEnvVar": "ANTHROPIC_API_KEY",
+    "requiresPricingCheck": true
   }
 }

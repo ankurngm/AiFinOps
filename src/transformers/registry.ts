@@ -9,6 +9,7 @@ import { providers } from '../config/providers.js';
 import { OpenRouterTransformer } from './openrouter.js';
 import { OllamaTransformer } from './ollama.js';
 import { OpenAITransformer } from './openai.js';
+import { AnthropicTransformer } from './anthropic.js';
 import type { ProviderTransformer } from './types.js';
 
 const transformers = new Map<string, ProviderTransformer>();
@@ -23,6 +24,10 @@ if (providers.ollama) {
 
 if (providers.openai) {
   transformers.set('openai', new OpenAITransformer(providers.openai));
+}
+
+if (providers.anthropic) {
+  transformers.set('anthropic', new AnthropicTransformer(providers.anthropic));
 }
 
 // Adding a new provider (e.g. Anthropic, Gemini): implement ProviderTransformer

@@ -13,6 +13,12 @@
 #
 # Run: ./openai-chat-completion-with-attribution.sh
 # Real cost: yes — a real OpenAI call (fractions of a cent with gpt-4o-mini).
+#
+# temperature is optional and passed straight through to OpenAI unmodified —
+# AiFinOps doesn't validate whether a given model accepts it. It works on
+# gpt-4o-mini (used here) and OpenAI's other standard chat models; OpenAI's
+# reasoning models (o3, o4-mini) are expected to reject a non-default
+# temperature (or top_p) with an error from OpenAI itself.
 
 set -euo pipefail
 
@@ -29,7 +35,8 @@ curl -s -i "$AIFINOPS_URL/v1/chat/completions" \
   -H "AiFinOps-Transaction-Id: tx_abc123xyz789" \
   -d '{
     "model": "openai/gpt-4o-mini",
-    "messages": [{ "role": "user", "content": "Say hello in one sentence." }]
+    "messages": [{ "role": "user", "content": "Say hello in one sentence." }],
+    "temperature": 0.7
   }'
 echo ""
 echo ""
