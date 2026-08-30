@@ -77,6 +77,8 @@ src/
   routes/
     chatCompletions.ts        POST /v1/chat/completions handler
     health.ts                  GET /health handler
+    logs.ts                     GET /api/logs, /api/logs/filters, /api/logs/:id
+    logsExport.ts                 GET /api/logs/export.csv, /api/logs/export.jsonl
   transformers/
     types.ts                  ProviderTransformer interface
     openAICompatibleTransformer.ts  shared base: buildRequest for any OpenAI-compatible provider
@@ -88,17 +90,26 @@ src/
   db/
     pool.ts                    pg Pool, built from PG* env vars
     logRequest.ts               insert one row per request/response
+    logsFilterBuilder.ts          builds a parameterized WHERE clause from validated log filters
+    logsRepository.ts              list/count/get-by-id/distinct-values/streamed-export queries
+    csvUtils.ts                     RFC 4180 CSV escaping + truncated-JSON preview for exports
   logging/
     auditLog.ts                 optional file-based audit log (Winston, size-rotated)
   schemas/
     chatCompletionRequest.ts    Zod schema for the inbound OpenAI-shaped body
     attribution.ts               Zod schema for the optional attribution headers
+    logsQuery.ts                   Zod schema for the logs list/filter/export query params
 config/
   providers.json                which providers are provisioned
   providerModelMap.json         which model IDs are provisioned per provider
   modelPricing.json             dated per-token pricing, for providers that don't self-report cost
 scripts/
   setup-db.ts                   creates the DB (if missing) + tables — `npm run setup-db`
+frontend/                       logs dashboard — React + Vite + Tailwind, its own npm workspace
+  src/
+    App.tsx, main.tsx             app shell, filter/pagination/selection state
+    api/                            fetch wrappers + TanStack Query hooks, response DTO types
+    components/                      FiltersBar, LogsTable, Pagination, RowDetailDrawer, ExportButtons
 ```
 
 ## Environment variables
@@ -506,7 +517,7 @@ asynchronously under the hood.
 ```json
 {
   "status": "ok",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "uptimeSeconds": 3421,
   "database": "reachable",
   "providers": { "openrouter": "ready" }
@@ -517,6 +528,56 @@ Returns `200` if Postgres is reachable (re-running the same `SELECT 1` check use
 `503` otherwise. `providers` reflects `getProviderReadiness()` per provider in
 `config/providers.json` — informational only, it does not affect the status code or HTTP status.
 Implementation: `src/routes/health.ts`.
+
+## Logs dashboard
+
+A filterable, paginated UI over the `requests` table, plus CSV/JSONL export, so answering "what
+did tenant X cost us last week" doesn't require `psql`. Backend: `src/routes/logs.ts` and
+`src/routes/logsExport.ts`, registered in `server.ts` alongside every other route. Frontend: a
+separate `frontend/` npm workspace (React + Vite + Tailwind), built to `frontend/dist` and served
+by the same Fastify process via `@fastify/static` — see [Get Started](README.md#-get-started) for
+the exact commands.
+
+**Endpoints** (all under `/api/logs*`, no auth — same posture as the rest of the gateway today):
+
+| Endpoint                     | Purpose                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/logs`              | Paginated list (`page`, `pageSize`, default 50/max 200), rows exclude `request_body`/`response_body`                     |
+| `GET /api/logs/filters`      | Dropdown options: `providers` (from `config/providers.json`), `statuses` (hardcoded), `resolvedModelIds` (DB `DISTINCT`) |
+| `GET /api/logs/:id`          | One row, full `requestBody`/`responseBody`. `404` if not found                                                           |
+| `GET /api/logs/export.csv`   | Streamed CSV — metadata columns plus a ~200-char JSON preview of each body                                               |
+| `GET /api/logs/export.jsonl` | Streamed NDJSON — one full row (untruncated bodies) per line                                                             |
+
+**Filters — two kinds, deliberately.** `provider`, `resolvedModelId`, and `status` are exact-match
+dropdowns backed by bounded, cheap-to-query sets. The seven free-form attribution fields
+(`regionId`, `environment`, `tenantId`, `applicationId`, `moduleId`, `processOrUserId`,
+`transactionId`) are plain text inputs matched with `ILIKE '%value%'` — a Splunk-style substring
+search, not a dropdown, since there's no bounded set of values to offer. `src/db/logsFilterBuilder.ts`
+builds the parameterized `WHERE` clause for both kinds; column names are always hardcoded literals
+in that file, values are always `$n` parameters, and user input is never interpolated into SQL.
+LIKE metacharacters (`%`, `_`) in a text-search value are escaped before being wrapped in
+wildcards, so a literal search for e.g. `50%` matches that text rather than being read as a
+pattern.
+
+Two indexes support this beyond what's listed in [Database schema](#database-schema) above:
+`idx_requests_status` and `idx_requests_resolved_model_id` (added in `scripts/setup-db.ts`,
+idempotent like every other index there). The seven `ILIKE`-searched columns intentionally stay
+unindexed — a leading wildcard can't use a plain B-tree index anyway, and a `pg_trgm` trigram
+index for them is deliberately deferred until real usage shows it's needed.
+
+**Pagination and export use different strategies.** The list endpoint uses `OFFSET` for the
+numbered pager — fine at this scale, and simple. Export walks the entire filtered result set, so
+it uses keyset pagination (`id > lastId ORDER BY id ASC`, batched) instead, since `OFFSET` cost
+grows linearly with how far into the export you are while keyset stays flat per batch. Both
+export routes stream their response via `reply.send(Readable.from(asyncGenerator))` — batches are
+read from Postgres and written to the client with real backpressure, never buffered in full in
+memory. See `iterateLogsForExport()` in `src/db/logsRepository.ts`.
+
+**Two `pg` type-mapping details that matter here:** `id` (`BIGSERIAL`) comes back from `pg` as a
+string, not a number, to avoid precision loss past `Number.MAX_SAFE_INTEGER` — every DTO types
+`id: string`, and the `:id` route param is validated as a digit string rather than coerced to a
+number. `request_body`/`response_body` (`JSONB`) round-trip as parsed JS objects automatically, no
+extra `JSON.parse` needed on read.
 
 ## Extending AiFinOps — adding a new provider
 
@@ -569,18 +630,25 @@ the `ProviderTransformer` interface, never to a concrete provider.
 
 ## Development
 
-| Command                                   | Purpose                                                                 |
-| ----------------------------------------- | ----------------------------------------------------------------------- |
-| `npm run dev`                             | Start the gateway with hot reload (`tsx watch`)                         |
-| `npm run build`                           | Type-checks and compiles to `dist/` (fails the build on any type error) |
-| `npm run start`                           | Runs the compiled build (`node dist/src/server.js`)                     |
-| `npm run typecheck`                       | `tsc --noEmit` — no build output, just type errors                      |
-| `npm run setup-db`                        | Creates the database (if missing) and the `requests` table              |
-| `npm run lint` / `npm run lint:fix`       | ESLint                                                                  |
-| `npm run format` / `npm run format:check` | Prettier                                                                |
+| Command                                   | Purpose                                                                             |
+| ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| `npm run dev` / `npm run dev:backend`     | Start the gateway with hot reload (`tsx watch`)                                     |
+| `npm run dev:frontend`                    | Start the dashboard's Vite dev server (proxies `/api` to `:8787`)                   |
+| `npm run build`                           | Builds the frontend, then type-checks and compiles the backend to `dist/`           |
+| `npm run build:frontend`                  | Builds only the dashboard, to `frontend/dist`                                       |
+| `npm run start`                           | Runs the compiled build (`node dist/src/server.js`), serving the dashboard if built |
+| `npm run typecheck`                       | `tsc --noEmit` — no build output, just type errors (backend only)                   |
+| `npm run setup-db`                        | Creates the database (if missing) and the `requests` table                          |
+| `npm run lint` / `npm run lint:fix`       | ESLint (backend only — `frontend/` has its own `npm run lint`)                      |
+| `npm run format` / `npm run format:check` | Prettier (covers both workspaces)                                                   |
 
-A Husky pre-commit hook runs `tsc --noEmit` and lint-staged (ESLint) before every commit, so
-type errors are caught before they're even committed, not just at build/runtime.
+`frontend/` is a separate npm workspace (`npm install` at the root installs both) with its own
+`tsconfig.json` and `eslint.config.js`, since it targets the browser/JSX rather than Node/ESM — see
+[Repository structure](#repository-structure) above.
+
+A Husky pre-commit hook runs `tsc --noEmit` for both the backend and the frontend workspace, plus
+lint-staged (ESLint) before every commit, so type errors are caught before they're even committed,
+not just at build/runtime.
 
 `tsconfig.json` runs with `strict: true`, `noUncheckedIndexedAccess: true`, and
 `noImplicitAny: true` — the goal is that a broken provider-string parse, a missing config field,

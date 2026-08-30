@@ -38,7 +38,8 @@ out and it's a `400`, no matter what the provider itself would accept:
 
 **v1 ships today:** full request-level cost logging for OpenRouter, with optional attribution
 tags (tenant, application, module, user, transaction, region, environment) captured on every
-call. **Next up:** rolling that up into a usage dashboard — see [Roadmap](#roadmap) below.
+call, plus a logs dashboard for searching and inspecting that data without SQL. **Next up:**
+rolling it up into spend/volume trends over time — see [Roadmap](#roadmap) below.
 
 → For exactly how requests are validated, routed, and logged, see
 [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -76,6 +77,19 @@ curl -s http://localhost:8787/v1/chat/completions \
 That's it — the response comes back OpenAI-shaped, and the call is already logged to Postgres
 with full request/response and cost detail, success or failure.
 
+**To browse what's been logged**, build the dashboard once and it's served alongside the API:
+
+```bash
+npm run build:frontend
+npm run dev   # or npm run build && npm run start for a production run
+```
+
+Then open `http://localhost:8787` — filter by date, provider, model, status, tenant, application,
+region, or user (free-text fields match anywhere in the value), inspect any call's full
+request/response, and export the filtered results as CSV or a full JSONL dump. For frontend-only
+hot reload while iterating on the UI, run `npm run dev:frontend` in a second terminal instead —
+its dev server proxies API calls to the backend on `:8787`.
+
 ## 🗺️ Roadmap
 
 Near-term priorities:
@@ -86,8 +100,9 @@ Near-term priorities:
   today's request-level logging.
 - **Spend limits at the model and application level** — configurable soft and hard limits, so
   spend can be capped before it happens.
-- **A usage dashboard** — a UI for spend, volume, and trends over time, instead of querying
-  Postgres directly.
+- **Rolling spend/volume trends on the dashboard** — the logs screen (see
+  [Get Started](#-get-started)) covers request-level inspection; charting cost and volume over
+  time is next.
 
 And further out: streaming responses, inbound gateway authentication, per-tenant/per-team
 provisioning scoping, normalized cross-provider error shapes, retry/fallback logic, and an
@@ -99,6 +114,16 @@ of this additive, not a rewrite.
 ## Changelog
 
 All notable changes to this project are documented here. Dates are in `YYYY-MM-DD` format.
+
+### 0.1.4 — 2026-08-29
+
+- **A logs dashboard** — search and filter every call by date, provider, model, status, tenant,
+  application, region, or user, without writing SQL. Free-text fields match anywhere in the
+  value, Splunk-style, so partial names find what you're looking for.
+- **Inspect any call in full** — click a row to see its complete request and response, not just
+  the summary fields.
+- **Export what you're looking at** — a CSV of the filtered results for spreadsheet analysis, or
+  a full JSONL export with complete, untruncated request/response bodies for deeper investigation.
 
 ### 0.1.3 — 2026-09-06
 

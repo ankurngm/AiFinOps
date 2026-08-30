@@ -1,2 +1,3 @@
 npm run typecheck
+npm run typecheck --workspace frontend
 npx lint-staged

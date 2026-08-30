@@ -6,13 +6,18 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import Fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
 import { env } from './config/env.js';
 import { getProviderReadiness } from './config/providers.js';
 import { checkPricingCoverage } from './config/modelPricing.js';
 import { pool } from './db/pool.js';
 import { chatCompletionsRoute } from './routes/chatCompletions.js';
 import { healthRoute } from './routes/health.js';
+import { logsRoute } from './routes/logs.js';
+import { logsExportRoute } from './routes/logsExport.js';
 
 function logProviderReadiness(): void {
   const { ready, notReady } = getProviderReadiness();
@@ -77,6 +82,19 @@ async function main(): Promise<void> {
 
   await app.register(chatCompletionsRoute);
   await app.register(healthRoute);
+  await app.register(logsRoute);
+  await app.register(logsExportRoute);
+
+  const frontendDist = join(process.cwd(), 'frontend/dist');
+  if (existsSync(join(frontendDist, 'index.html'))) {
+    await app.register(fastifyStatic, { root: frontendDist });
+    console.log('✅ Serving the logs dashboard from frontend/dist');
+  } else {
+    console.log(
+      'ℹ️  frontend/dist not found — run `npm run build:frontend` to serve the dashboard from ' +
+        'this process, or `npm run dev:frontend` for local development.',
+    );
+  }
 
   try {
     await app.listen({ port: env.PORT, host: '0.0.0.0' });
