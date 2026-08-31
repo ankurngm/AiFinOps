@@ -13,12 +13,13 @@ export function Pagination({
   totalRows,
   onPageChange,
 }: PaginationProps) {
-  const shown = totalRows === 0 ? 0 : Math.min(pageSize, totalRows - (page - 1) * pageSize);
+  const rangeStart = totalRows === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = totalRows === 0 ? 0 : Math.min(page * pageSize, totalRows);
 
   return (
     <div className="foot-row">
       <span>
-        Showing {shown} of {totalRows.toLocaleString()} requests
+        Showing {rangeStart}-{rangeEnd} of {totalRows.toLocaleString()} requests
       </span>
       <div className="foot-nav">
         <span>

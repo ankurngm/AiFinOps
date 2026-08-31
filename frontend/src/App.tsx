@@ -8,9 +8,18 @@ import { Pagination } from './components/Pagination';
 import { RowDetailDrawer } from './components/RowDetailDrawer';
 
 const PAGE_SIZE = 50;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function last24HoursFilter(): LogsFilters {
+  const now = new Date();
+  return {
+    startDate: new Date(now.getTime() - ONE_DAY_MS).toISOString(),
+    endDate: now.toISOString(),
+  };
+}
 
 export default function App() {
-  const [filters, setFilters] = useState<LogsFilters>({});
+  const [filters, setFilters] = useState<LogsFilters>(last24HoursFilter);
   const [page, setPage] = useState(1);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
 
