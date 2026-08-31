@@ -14,7 +14,9 @@ export default tseslint.config(
   {
     // examples/ are standalone demo scripts meant to be copy-paste-able and
     // run independently — not part of the compiled/type-checked project.
-    ignores: ['dist/**', 'node_modules/**', 'examples/**'],
+    // frontend/ is its own workspace with its own ESLint config (browser
+    // globals, JSX, a separate tsconfig) rather than fighting this one.
+    ignores: ['dist/**', 'node_modules/**', 'examples/**', 'frontend/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

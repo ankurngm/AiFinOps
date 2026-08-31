@@ -73,26 +73,43 @@ src/
     env.ts                   Zod schema for process.env — infra vars only (PG*, PORT, NODE_ENV)
     providers.ts              Loads/validates config/providers.json, provider readiness check
     providerModelMap.ts       Loads/validates config/providerModelMap.json
+    modelPricing.ts            Loads/validates config/modelPricing.json, cost lookup + math
   routes/
     chatCompletions.ts        POST /v1/chat/completions handler
     health.ts                  GET /health handler
+    logs.ts                     GET /api/logs, /api/logs/filters, /api/logs/:id
+    logsExport.ts                 GET /api/logs/export.csv, /api/logs/export.jsonl
   transformers/
     types.ts                  ProviderTransformer interface
+    openAICompatibleTransformer.ts  shared base: buildRequest for any OpenAI-compatible provider
     openrouter.ts              OpenRouterTransformer implementation
-    registry.ts                 provider name -> transformer instance lookup
+    ollama.ts                   OllamaTransformer implementation
+    openai.ts                   OpenAITransformer implementation
+    anthropic.ts                 AnthropicTransformer implementation (implements ProviderTransformer directly)
+    registry.ts                   provider name -> transformer instance lookup
   db/
     pool.ts                    pg Pool, built from PG* env vars
     logRequest.ts               insert one row per request/response
+    logsFilterBuilder.ts          builds a parameterized WHERE clause from validated log filters
+    logsRepository.ts              list/count/get-by-id/distinct-values/streamed-export queries
+    csvUtils.ts                     RFC 4180 CSV escaping + truncated-JSON preview for exports
   logging/
     auditLog.ts                 optional file-based audit log (Winston, size-rotated)
   schemas/
     chatCompletionRequest.ts    Zod schema for the inbound OpenAI-shaped body
     attribution.ts               Zod schema for the optional attribution headers
+    logsQuery.ts                   Zod schema for the logs list/filter/export query params
 config/
   providers.json                which providers are provisioned
   providerModelMap.json         which model IDs are provisioned per provider
+  modelPricing.json             dated per-token pricing, for providers that don't self-report cost
 scripts/
   setup-db.ts                   creates the DB (if missing) + tables — `npm run setup-db`
+frontend/                       logs dashboard — React + Vite + Tailwind, its own npm workspace
+  src/
+    App.tsx, main.tsx             app shell, filter/pagination/selection state
+    api/                            fetch wrappers + TanStack Query hooks, response DTO types
+    components/                      FiltersBar, LogsTable, Pagination, RowDetailDrawer, ExportButtons
 ```
 
 ## Environment variables
@@ -107,6 +124,8 @@ scripts/
 | `PORT`                 | Yes                             | Gateway HTTP port (default `8787`)                                                            |
 | `NODE_ENV`             | Yes (defaults to `development`) | `development` \| `production` \| `test`                                                       |
 | `OPENROUTER_API_KEY`   | No — checked per-provider       | OpenRouter API key. Only needed if you actually call the `openrouter` provider                |
+| `OPENAI_API_KEY`       | No — checked per-provider       | OpenAI API key. Only needed if you actually call the `openai` provider                        |
+| `ANTHROPIC_API_KEY`    | No — checked per-provider       | Anthropic API key. Only needed if you actually call the `anthropic` provider                  |
 | `FILE_LOGGING_ENABLED` | No (defaults to `false`)        | Turns on the file-based audit log — see [File-based audit logging](#file-based-audit-logging) |
 | `LOG_DIR`              | No (defaults to `./logs`)       | Directory the audit log file is written to (only used if enabled)                             |
 | `LOG_MAX_SIZE`         | No (defaults to `10m`)          | Rotation threshold, e.g. `10m`, `500k`, `1g` (only used if enabled)                           |
@@ -144,20 +163,48 @@ rejected with a `400` even if the upstream provider would happily serve it.
   "openrouter": {
     "displayName": "OpenRouter",
     "baseUrl": "https://openrouter.ai/api/v1",
-    "apiKeyEnvVar": "OPENROUTER_API_KEY"
+    "apiKeyEnvVar": "OPENROUTER_API_KEY",
+    "requiresPricingCheck": false
+  },
+  "ollama": {
+    "displayName": "Ollama",
+    "baseUrl": "http://localhost:11434/v1",
+    "requiresPricingCheck": false
+  },
+  "openai": {
+    "displayName": "OpenAI",
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKeyEnvVar": "OPENAI_API_KEY",
+    "requiresPricingCheck": true
+  },
+  "anthropic": {
+    "displayName": "Anthropic",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKeyEnvVar": "ANTHROPIC_API_KEY",
+    "requiresPricingCheck": true
   }
 }
 ```
 
 `apiKeyEnvVar` is optional — omit it for a keyless/local provider and no `Authorization` header
-is ever attached for it.
+is ever attached for it. `requiresPricingCheck` controls the boot-time pricing check described
+in [Model pricing](#model-pricing) below — set explicitly to `false` for a provider that
+self-reports cost (OpenRouter) or is a known-free default (Ollama's local models); set it to
+`true` (or omit it, since that's the default) for a provider that's billed but doesn't self-report
+cost, like OpenAI or Anthropic, so a model added without a matching `modelPricing.json` entry
+doesn't go silently unpriced.
 
 **`config/providerModelMap.json`** — which model IDs are allowed per provider, using each
-provider's own native model naming (for OpenRouter, its `vendor/model` IDs):
+provider's own native model naming (for OpenRouter, its `vendor/model` IDs; for Ollama, its own
+model tags, with Ollama Cloud models carrying a `:cloud` suffix, e.g. `"gpt-oss:120b-cloud"`; for
+OpenAI and Anthropic, their own model IDs):
 
 ```json
 {
-  "openrouter": ["openai/gpt-4o", "openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"]
+  "openrouter": ["openai/gpt-4o", "openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
+  "ollama": ["llama3.2:3b"],
+  "openai": ["gpt-5", "gpt-5-mini", "gpt-4o", "gpt-4o-mini"],
+  "anthropic": ["claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001"]
 }
 ```
 
@@ -178,6 +225,111 @@ restart the gateway:
 Callers then address it as `"openrouter/mistralai/mistral-large"` in their request's `model`
 field (the gateway splits on the _first_ `/`; everything after it — including any further
 slashes — is passed through as-is to the provider).
+
+## Model pricing
+
+Some providers report cost directly in their response (OpenRouter). Others — Ollama, whether
+local or a `:cloud`-suffixed model, OpenAI, and Anthropic — only report token counts, never a
+price. For those, `config/modelPricing.json` supplies per-token rates, keyed by
+`(provider, model)`:
+
+```json
+{
+  "ollama": {
+    "*": [
+      {
+        "startDate": "2026-06-15",
+        "endDate": null,
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "cachedInputPerMillion": null,
+        "cacheWritePerMillion": null
+      }
+    ]
+  }
+}
+```
+
+(This is the shipped default — a `"*"` wildcard at `$0`, since most Ollama usage is local and
+free. See "Wildcard fallback" below for exactly how it applies, and its one important
+exception.)
+
+**Dated, not a flat rate.** Each entry is a list of records with a `[startDate, endDate)` window
+(`endDate` is the first day the record no longer applies — exclusive, not inclusive). **`endDate:
+null` means the record has no known end and is treated as currently in effect** — this is the
+normal state for whatever price is active right now; only the newest record for a model should
+have it. Only the one record whose window covers _today_ is ever used to compute a fresh cost;
+older records stay in the file for history but are never selected again. When a price changes:
+set `endDate` on the old record, append a new one with `startDate` equal to that `endDate` and
+`endDate: null`.
+
+**"Today" is a UTC calendar day, not the server's local one.** `startDate`/`endDate` transitions
+take effect at UTC midnight, deliberately — a single unambiguous clock, rather than one that
+shifts depending on which timezone the process happens to be deployed in (two instances in
+different timezones would otherwise disagree about which record is current). The practical
+effect: `"startDate": "2026-08-22"` takes effect at 5pm on the 21st for someone in US Pacific
+time, not midnight their own clock. Set dates with that in mind — depending on your timezone, a
+transition can land up to half a day off from your own local calendar day.
+
+**If more than one record is valid for the same date** (a data-entry mistake — windows should
+never overlap), `getCurrentPricing()` returns the **first matching record in array order**, not
+the newest or the cheapest. This is a plain `Array.find()`, not a conflict-resolution rule — the
+file's array order is the tiebreaker, so overlapping windows should be treated as a bug in the
+data to fix, not a mechanism to rely on.
+
+**Being unpriced never blocks a call.** Provisioning (`providerModelMap.json`) and pricing
+(`modelPricing.json`) are deliberately independent gates. A model can be fully approved and
+callable with zero pricing data — the call still processes normally, and `cost` is simply logged
+as `NULL` (both in Postgres and the audit log), meaning "not specified," not `0`, which means
+"confirmed free."
+
+**Wildcard fallback with `"*"`.** A provider entry can include a `"*"` "model" alongside (or
+instead of) specific ones, as a provider-level default rate. This exists because most Ollama
+usage is local and genuinely free — declaring that once is simpler than repeating an identical
+`$0` record for every local model. The mechanism itself isn't Ollama-specific (any provider can
+use `"*"`), it's just only populated for Ollama today. Matching is exact and case-sensitive in
+both directions, same as everywhere else provider/model strings are compared.
+
+**`"*"` only applies when a model has no pricing history at all — never as a rescue for an
+expired one.** `getCurrentPricing()` checks whether the model has **any key** under that provider
+in `modelPricing.json`, not just whether it has a currently-valid record:
+
+- No key for the model at all → fall back to `"*"` (if present).
+- A key exists but every record under it has expired (or none is valid yet) → returns `NULL`,
+  **`"*"` is never consulted.**
+
+The reasoning: a model with its own recorded history was deliberately priced at some point — an
+all-expired history means someone forgot to add the next record, which is a real gap worth
+surfacing, not something to quietly paper over with a possibly-wrong wildcard rate. This is also
+why the boot-time coverage check still flags a lapsed model even when the provider has a healthy
+`"*"` entry — the wildcard only suppresses that warning for models with no history at all.
+
+**Where the cost math runs.** Transformers never compute cost themselves — `OllamaTransformer`
+always reports `cost: null`, same as any future provider without native pricing. A single
+enrichment step in `src/routes/chatCompletions.ts`, right after a successful `parseResponse`,
+fills in `cost` from `modelPricing.json` only when the transformer didn't supply one. This keeps
+transformers mechanical (translate request/response shapes) and the one cross-cutting concern
+(pricing) in one place. **The enrichment only affects what's logged** — the response body
+returned to the caller is never mutated; Ollama's real response has no cost field and stays that
+way.
+
+`cachedInputPerMillion`/`cacheWritePerMillion` are optional per record. Cached tokens are
+treated as a discounted subset of prompt tokens (falling back to the normal input rate if no
+cache rate is given, so an unpriced discount never silently undercounts cost); cache-write
+tokens are treated as a separate, additional operation, priced only if a rate is given. See
+`computeCost()` in `src/config/modelPricing.ts` for the exact math.
+
+`cacheWritePerMillion` is `null` for every Anthropic entry in `config/modelPricing.json` —
+`AnthropicTransformer` doesn't implement prompt caching, so no request it makes ever triggers a
+cache write.
+
+**Boot-time visibility, not enforcement.** For every provider whose `requiresPricingCheck`
+resolves to `true` (explicit `true`, or the field is entirely absent), the gateway walks its
+approved models and warns (non-fatal) about any without a currently-valid pricing record. For a
+provider with `requiresPricingCheck: false`, a different, non-fatal reminder prints instead —
+pricing enforcement is off for that provider, so if some of its models are actually billed (e.g.
+Ollama Cloud, added later, sharing the `ollama` provider entry with free local models), that
+needs a deliberate flip to `true` plus pricing entries for the billed models specifically.
 
 ## Database schema
 
@@ -209,8 +361,8 @@ CREATE TABLE IF NOT EXISTS requests (
   cached_tokens         INTEGER,
   cache_write_tokens    INTEGER,
   reasoning_tokens      INTEGER,
-  cost                  NUMERIC(12, 6),     -- OpenRouter's own reported cost, in credits
-  upstream_inference_cost NUMERIC(12, 6),   -- from usage.cost_details.upstream_inference_cost
+  cost                  NUMERIC(12, 6),     -- provider-reported, or filled from modelPricing.json; NULL if neither
+  upstream_inference_cost NUMERIC(12, 6),   -- from usage.cost_details.upstream_inference_cost (OpenRouter only)
   latency_ms            INTEGER NOT NULL,
   region_id             TEXT,               -- optional attribution, see below
   environment           TEXT,
@@ -365,7 +517,7 @@ asynchronously under the hood.
 ```json
 {
   "status": "ok",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "uptimeSeconds": 3421,
   "database": "reachable",
   "providers": { "openrouter": "ready" }
@@ -376,6 +528,56 @@ Returns `200` if Postgres is reachable (re-running the same `SELECT 1` check use
 `503` otherwise. `providers` reflects `getProviderReadiness()` per provider in
 `config/providers.json` — informational only, it does not affect the status code or HTTP status.
 Implementation: `src/routes/health.ts`.
+
+## Logs dashboard
+
+A filterable, paginated UI over the `requests` table, plus CSV/JSONL export, so answering "what
+did tenant X cost us last week" doesn't require `psql`. Backend: `src/routes/logs.ts` and
+`src/routes/logsExport.ts`, registered in `server.ts` alongside every other route. Frontend: a
+separate `frontend/` npm workspace (React + Vite + Tailwind), built to `frontend/dist` and served
+by the same Fastify process via `@fastify/static` — see [Get Started](README.md#-get-started) for
+the exact commands.
+
+**Endpoints** (all under `/api/logs*`, no auth — same posture as the rest of the gateway today):
+
+| Endpoint                     | Purpose                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `GET /api/logs`              | Paginated list (`page`, `pageSize`, default 50/max 200), rows exclude `request_body`/`response_body`                     |
+| `GET /api/logs/filters`      | Dropdown options: `providers` (from `config/providers.json`), `statuses` (hardcoded), `resolvedModelIds` (DB `DISTINCT`) |
+| `GET /api/logs/:id`          | One row, full `requestBody`/`responseBody`. `404` if not found                                                           |
+| `GET /api/logs/export.csv`   | Streamed CSV — metadata columns plus a ~200-char JSON preview of each body                                               |
+| `GET /api/logs/export.jsonl` | Streamed NDJSON — one full row (untruncated bodies) per line                                                             |
+
+**Filters — two kinds, deliberately.** `provider`, `resolvedModelId`, and `status` are exact-match
+dropdowns backed by bounded, cheap-to-query sets. The seven free-form attribution fields
+(`regionId`, `environment`, `tenantId`, `applicationId`, `moduleId`, `processOrUserId`,
+`transactionId`) are plain text inputs matched with `ILIKE '%value%'` — a Splunk-style substring
+search, not a dropdown, since there's no bounded set of values to offer. `src/db/logsFilterBuilder.ts`
+builds the parameterized `WHERE` clause for both kinds; column names are always hardcoded literals
+in that file, values are always `$n` parameters, and user input is never interpolated into SQL.
+LIKE metacharacters (`%`, `_`) in a text-search value are escaped before being wrapped in
+wildcards, so a literal search for e.g. `50%` matches that text rather than being read as a
+pattern.
+
+Two indexes support this beyond what's listed in [Database schema](#database-schema) above:
+`idx_requests_status` and `idx_requests_resolved_model_id` (added in `scripts/setup-db.ts`,
+idempotent like every other index there). The seven `ILIKE`-searched columns intentionally stay
+unindexed — a leading wildcard can't use a plain B-tree index anyway, and a `pg_trgm` trigram
+index for them is deliberately deferred until real usage shows it's needed.
+
+**Pagination and export use different strategies.** The list endpoint uses `OFFSET` for the
+numbered pager — fine at this scale, and simple. Export walks the entire filtered result set, so
+it uses keyset pagination (`id > lastId ORDER BY id ASC`, batched) instead, since `OFFSET` cost
+grows linearly with how far into the export you are while keyset stays flat per batch. Both
+export routes stream their response via `reply.send(Readable.from(asyncGenerator))` — batches are
+read from Postgres and written to the client with real backpressure, never buffered in full in
+memory. See `iterateLogsForExport()` in `src/db/logsRepository.ts`.
+
+**Two `pg` type-mapping details that matter here:** `id` (`BIGSERIAL`) comes back from `pg` as a
+string, not a number, to avoid precision loss past `Number.MAX_SAFE_INTEGER` — every DTO types
+`id: string`, and the `:id` route param is validated as a digit string rather than coerced to a
+number. `request_body`/`response_body` (`JSONB`) round-trip as parsed JS objects automatically, no
+extra `JSON.parse` needed on read.
 
 ## Extending AiFinOps — adding a new provider
 
@@ -391,31 +593,62 @@ interface ProviderTransformer {
 
 `buildRequest` turns our internal (OpenAI-shaped) request into whatever the upstream provider
 actually expects; `parseResponse` validates and normalizes what comes back, extracting usage/cost
-for logging. Adding a new provider (Anthropic native, Gemini, a local Ollama endpoint, etc.)
-means:
+for logging.
 
-1. Implement `ProviderTransformer` in a new file, e.g. `src/transformers/anthropic.ts`.
+**If the new provider speaks OpenAI's chat completions dialect** — `POST
+{baseUrl}/chat/completions`, an optional Bearer-token `Authorization` header, `model` as a plain
+field — extend `OpenAICompatibleTransformer` (`src/transformers/openAICompatibleTransformer.ts`)
+instead of implementing `ProviderTransformer` directly. It supplies `buildRequest` for you (used
+unmodified by `OpenRouterTransformer`, `OllamaTransformer`, and `OpenAITransformer` today — not a
+hypothetical, it's identical code that used to be duplicated across files); you only write
+`providerName` and
+`parseResponse`, since response shape is where providers actually differ. If a provider's request
+building deviates from that pattern (different auth header, different path), just override
+`buildRequest` in the subclass — normal inheritance, nothing special required.
+
+**If the new provider doesn't fit that shape at all** (a genuinely different native API), implement
+`ProviderTransformer` directly instead of extending the base class. `AnthropicTransformer`
+(`src/transformers/anthropic.ts`) is the worked example: Anthropic's `/v1/messages` endpoint uses
+`x-api-key`/`anthropic-version` headers instead of Bearer auth, a top-level `system` string
+instead of a system-role message, and a mandatory `max_tokens` — different enough that both
+`buildRequest` and `parseResponse` do real translation work, including synthesizing an
+OpenAI-chat-completion-shaped `body` from Anthropic's native response rather than passing it
+through unmodified.
+
+Either way, adding a new provider means:
+
+1. Implement `ProviderTransformer` (directly, or via `OpenAICompatibleTransformer`) in a new
+   file, e.g. `src/transformers/anthropic.ts`.
 2. Add an entry for it in `config/providers.json`.
 3. Add its allowed model IDs to `config/providerModelMap.json`.
 4. Register an instance of it in `src/transformers/registry.ts`.
+5. If it doesn't report cost natively, add its models to `config/modelPricing.json` (see [Model
+   pricing](#model-pricing)) — not required for the call to work, only for `cost` to be non-null.
 
 **No changes to `src/routes/chatCompletions.ts` are required** — the route only ever talks to
 the `ProviderTransformer` interface, never to a concrete provider.
 
 ## Development
 
-| Command                                   | Purpose                                                                 |
-| ----------------------------------------- | ----------------------------------------------------------------------- |
-| `npm run dev`                             | Start the gateway with hot reload (`tsx watch`)                         |
-| `npm run build`                           | Type-checks and compiles to `dist/` (fails the build on any type error) |
-| `npm run start`                           | Runs the compiled build (`node dist/src/server.js`)                     |
-| `npm run typecheck`                       | `tsc --noEmit` — no build output, just type errors                      |
-| `npm run setup-db`                        | Creates the database (if missing) and the `requests` table              |
-| `npm run lint` / `npm run lint:fix`       | ESLint                                                                  |
-| `npm run format` / `npm run format:check` | Prettier                                                                |
+| Command                                   | Purpose                                                                             |
+| ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| `npm run dev` / `npm run dev:backend`     | Start the gateway with hot reload (`tsx watch`)                                     |
+| `npm run dev:frontend`                    | Start the dashboard's Vite dev server (proxies `/api` to `:8787`)                   |
+| `npm run build`                           | Builds the frontend, then type-checks and compiles the backend to `dist/`           |
+| `npm run build:frontend`                  | Builds only the dashboard, to `frontend/dist`                                       |
+| `npm run start`                           | Runs the compiled build (`node dist/src/server.js`), serving the dashboard if built |
+| `npm run typecheck`                       | `tsc --noEmit` — no build output, just type errors (backend only)                   |
+| `npm run setup-db`                        | Creates the database (if missing) and the `requests` table                          |
+| `npm run lint` / `npm run lint:fix`       | ESLint (backend only — `frontend/` has its own `npm run lint`)                      |
+| `npm run format` / `npm run format:check` | Prettier (covers both workspaces)                                                   |
 
-A Husky pre-commit hook runs `tsc --noEmit` and lint-staged (ESLint) before every commit, so
-type errors are caught before they're even committed, not just at build/runtime.
+`frontend/` is a separate npm workspace (`npm install` at the root installs both) with its own
+`tsconfig.json` and `eslint.config.js`, since it targets the browser/JSX rather than Node/ESM — see
+[Repository structure](#repository-structure) above.
+
+A Husky pre-commit hook runs `tsc --noEmit` for both the backend and the frontend workspace, plus
+lint-staged (ESLint) before every commit, so type errors are caught before they're even committed,
+not just at build/runtime.
 
 `tsconfig.json` runs with `strict: true`, `noUncheckedIndexedAccess: true`, and
 `noImplicitAny: true` — the goal is that a broken provider-string parse, a missing config field,

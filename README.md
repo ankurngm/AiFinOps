@@ -38,19 +38,22 @@ out and it's a `400`, no matter what the provider itself would accept:
 
 **v1 ships today:** full request-level cost logging for OpenRouter, with optional attribution
 tags (tenant, application, module, user, transaction, region, environment) captured on every
-call. **Next up:** rolling that up into a usage dashboard — see [Roadmap](#roadmap) below.
+call, plus a logs dashboard for searching and inspecting that data without SQL. **Next up:**
+rolling it up into spend/volume trends over time — see [Roadmap](#roadmap) below.
 
 → For exactly how requests are validated, routed, and logged, see
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 🚀 Get Started
 
-Prerequisites: Node.js 20+, a running Postgres server, and an OpenRouter API key.
+Prerequisites: Node.js 20+, a running Postgres server, and an API key for at least one provider
+you plan to use (OpenRouter, OpenAI, Anthropic — Ollama needs no key at all).
 
 ```bash
 npm install
 cp .env.example .env
-# edit .env: fill in your Postgres credentials and OPENROUTER_API_KEY
+# edit .env: fill in your Postgres credentials, plus OPENROUTER_API_KEY, OPENAI_API_KEY,
+# and/or ANTHROPIC_API_KEY
 npm run setup-db
 npm run dev
 ```
@@ -74,6 +77,19 @@ curl -s http://localhost:8787/v1/chat/completions \
 That's it — the response comes back OpenAI-shaped, and the call is already logged to Postgres
 with full request/response and cost detail, success or failure.
 
+**To browse what's been logged**, build the dashboard once and it's served alongside the API:
+
+```bash
+npm run build:frontend
+npm run dev   # or npm run build && npm run start for a production run
+```
+
+Then open `http://localhost:8787` — filter by date, provider, model, status, tenant, application,
+region, or user (free-text fields match anywhere in the value), inspect any call's full
+request/response, and export the filtered results as CSV or a full JSONL dump. For frontend-only
+hot reload while iterating on the UI, run `npm run dev:frontend` in a second terminal instead —
+its dev server proxies API calls to the backend on `:8787`.
+
 ## 🗺️ Roadmap
 
 Near-term priorities:
@@ -84,8 +100,9 @@ Near-term priorities:
   today's request-level logging.
 - **Spend limits at the model and application level** — configurable soft and hard limits, so
   spend can be capped before it happens.
-- **A usage dashboard** — a UI for spend, volume, and trends over time, instead of querying
-  Postgres directly.
+- **Rolling spend/volume trends on the dashboard** — the logs screen (see
+  [Get Started](#-get-started)) covers request-level inspection; charting cost and volume over
+  time is next.
 
 And further out: streaming responses, inbound gateway authentication, per-tenant/per-team
 provisioning scoping, normalized cross-provider error shapes, retry/fallback logic, and an
@@ -98,44 +115,45 @@ of this additive, not a rewrite.
 
 All notable changes to this project are documented here. Dates are in `YYYY-MM-DD` format.
 
+### 1.0.0 — 2026-08-30
+
+- **Native OpenAI and Anthropic support** — call either directly, no OpenRouter hop required,
+  under the exact same allow-list, logging, and attribution guarantees as every other provider.
+- **Ollama support** — run models locally, or via Ollama Cloud.
+- **A logs dashboard** — search and filter every call by date, provider, model, status, tenant,
+  application, region, or user, without writing SQL. Export data as CSV or, JSONL(untruncated
+  request/response bodies for deeper investigation) formats.
+- **Built-in pricing for OpenAI and Anthropic's current model lineups** — cost is computed
+  automatically from published rates, no manual entry needed to get accurate spend data from day
+  one.
+- **Bring your own negotiated pricing for exact cost visibility.** Supports, if your enterprise has
+  negotiated custom or discounted rates with a provider — including separate rates for
+  cached-token discounts and cache-write costs.
+- **New runnable examples** showing cost attribution against OpenAI, Anthropic, and a free local
+  Ollama model, in both Node.js and curl.
+
 ### 0.1.1 — 2026-08-23
 
-- Licensed under [Elastic License 2.0](LICENSE), plus a supplemental attribution term — free for
-  personal, commercial, and enterprise use and modification, with restrictions on (a) offering
-  it as a hosted/managed service to third parties, and (b) redistributing without a visible
-  attribution link back to the original repository.
-- Added a license header to every source file (`src/`, `scripts/`, `eslint.config.js`).
-- Added a `GET /health` endpoint — reports overall status, app version, uptime, Postgres
-  reachability (`200`/`503`), and per-provider readiness. Safe to expose without inbound auth;
-  reports no secrets or business data.
-- Added optional cost-attribution headers (`AiFinOps-Region-Id`, `-Environment`, `-Tenant-Id`,
-  `-Application-Id`, `-Module-Id`, `-Process-Or-User-Id`, `-Transaction-Id`) — captured in the
-  `requests` table for future dashboard filtering, never forwarded to the LLM provider. See
-  [ARCHITECTURE.md](ARCHITECTURE.md#attribution-headers) for the full field reference.
-- Added Node.js usage examples under [`examples/nodejs/`](examples/nodejs) — basic call,
-  call with attribution, calling an unprovisioned model (shows the compliance gate), and using
-  the official `openai` SDK against AiFinOps via `baseURL`.
-- Added curl usage examples under [`examples/curl/`](examples/curl) — basic call, call with
-  attribution, and calling an unprovisioned model (shows the compliance gate).
-- Added optional file-based audit logging (`FILE_LOGGING_ENABLED`, off by default) — one JSON
-  line per call (caller request, what was forwarded to the provider, the provider's response,
-  and what was sent back to the caller), size-rotated via `LOG_MAX_SIZE` (default `10m`),
-  retention deliberately uncapped. Every request now gets a real UUID (`request.id`), shared
-  across Fastify's own logs, the audit log file, and a new `request_id` column in Postgres, so
-  any of the three can be used to find the others. Postgres logging is unaffected either way.
-  See [ARCHITECTURE.md](ARCHITECTURE.md#file-based-audit-logging) for the full design.
+- **Licensing clarified** — [Elastic License 2.0](LICENSE) plus an attribution requirement: free
+  to use, modify, and redistribute for personal, commercial, or enterprise purposes.
+- **A health check endpoint** — a safe, no-auth-required way to monitor whether the gateway and
+  its database are up, suitable for load balancers and uptime monitoring.
+- **Cost attribution tagging** — tag every call with your own business context (tenant,
+  application, team, user, region, environment, transaction), so spend can be broken down by
+  who's actually driving it, without any of that data ever reaching the LLM provider. See
+  [ARCHITECTURE.md](ARCHITECTURE.md#attribution-headers).
+- **Runnable examples** in Node.js and curl — a real call, a call tagged with attribution, and
+  what happens when an unapproved model is requested.
+- **Enterprise-grade audit logging** — an optional, file-based audit trail suitable for
+  ingestion into a SIEM like Splunk, with every entry traceable back to the same request across
+  logs and the database.
 
 ### 0.1.0 — 2026-08-19
 
-Initial release.
-
-- OpenAI-compatible `POST /v1/chat/completions` endpoint.
-- OpenRouter provider support via the `ProviderTransformer` interface.
-- Provider/model allow-list gate (`config/providers.json`,
-  `config/providerModelMap.json`) as a preventive cost-control mechanism.
-- Full request/response/cost logging to Postgres (`requests` table), success or failure.
-- Zod-validated environment configuration with fail-fast startup checks.
-- Postgres connectivity check (`SELECT 1`) before accepting HTTP traffic.
+Initial release — an OpenAI-compatible gateway to OpenRouter, with a compliance-gated allow-list
+of approved providers and models, full request/response/cost logging to Postgres for every call,
+and fail-fast startup checks so misconfiguration is caught immediately rather than in
+production.
 
 ---
 

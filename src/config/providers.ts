@@ -14,6 +14,13 @@ const providerConfigSchema = z.object({
   baseUrl: z.string().url(),
   // Optional: keyless providers (e.g. a local Ollama endpoint) omit this
   apiKeyEnvVar: z.string().min(1).optional(),
+  // Whether every approved model for this provider must have a valid entry
+  // in config/modelPricing.json, checked (and warned on, non-fatally) at
+  // boot. Omitted entirely => defaults to true (fail toward warning, so a
+  // new provider added without thinking about pricing doesn't go silently
+  // unpriced). Providers that self-report cost in their own response (e.g.
+  // OpenRouter) should set this to false explicitly.
+  requiresPricingCheck: z.boolean().optional(),
 });
 
 const providersSchema = z.record(z.string(), providerConfigSchema);

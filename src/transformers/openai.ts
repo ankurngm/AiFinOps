@@ -9,15 +9,18 @@ import { z } from 'zod';
 import { OpenAICompatibleTransformer } from './openAICompatibleTransformer.js';
 import type { ParsedResponse } from './types.js';
 
+// OpenAI's own chat completions endpoint — the dialect every other
+// "OpenAI-compatible" provider is imitating. Usage reports token counts and,
+// for supported models, cached and reasoning token breakdowns — but never a
+// cost figure: OpenAI, unlike OpenRouter, doesn't self-report price. Cost is
+// filled in later (from config/modelPricing.json) by the route handler.
 const usageSchema = z.object({
   prompt_tokens: z.number().nullish(),
   completion_tokens: z.number().nullish(),
   total_tokens: z.number().nullish(),
-  cost: z.number().nullish(),
   prompt_tokens_details: z
     .object({
       cached_tokens: z.number().nullish(),
-      cache_write_tokens: z.number().nullish(),
     })
     .nullish(),
   completion_tokens_details: z
@@ -25,14 +28,9 @@ const usageSchema = z.object({
       reasoning_tokens: z.number().nullish(),
     })
     .nullish(),
-  cost_details: z
-    .object({
-      upstream_inference_cost: z.number().nullish(),
-    })
-    .nullish(),
 });
 
-const openRouterResponseSchema = z
+const openAIResponseSchema = z
   .object({
     id: z.string().optional(),
     object: z.string().optional(),
@@ -43,19 +41,18 @@ const openRouterResponseSchema = z
   .passthrough();
 
 /**
- * V1's only provider transformer. Handles OpenRouter's chat completions
- * endpoint, which is already OpenAI-shaped — we mostly pass the body
- * through, swapping our own "provider/model" prefix for OpenRouter's
- * native "vendor/model" id, and extract usage/cost for logging.
- * buildRequest is inherited unchanged from OpenAICompatibleTransformer.
+ * Handles OpenAI's own Chat Completions endpoint directly (as opposed to
+ * OpenRouter, which fronts it). buildRequest is inherited unchanged from
+ * OpenAICompatibleTransformer — same POST {baseUrl}/chat/completions shape,
+ * same Bearer auth.
  */
-export class OpenRouterTransformer extends OpenAICompatibleTransformer {
-  readonly providerName = 'openrouter';
+export class OpenAITransformer extends OpenAICompatibleTransformer {
+  readonly providerName = 'openai';
 
   parseResponse(rawResponse: unknown): ParsedResponse {
-    const result = openRouterResponseSchema.safeParse(rawResponse);
+    const result = openAIResponseSchema.safeParse(rawResponse);
     if (!result.success) {
-      throw new Error(`Unexpected response shape from OpenRouter: ${result.error.message}`);
+      throw new Error(`Unexpected response shape from OpenAI: ${result.error.message}`);
     }
 
     const usage = result.data.usage;
@@ -67,10 +64,10 @@ export class OpenRouterTransformer extends OpenAICompatibleTransformer {
         completionTokens: usage?.completion_tokens ?? null,
         totalTokens: usage?.total_tokens ?? null,
         cachedTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
-        cacheWriteTokens: usage?.prompt_tokens_details?.cache_write_tokens ?? null,
+        cacheWriteTokens: null,
         reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens ?? null,
-        cost: usage?.cost ?? null,
-        upstreamInferenceCost: usage?.cost_details?.upstream_inference_cost ?? null,
+        cost: null,
+        upstreamInferenceCost: null,
       },
     };
   }

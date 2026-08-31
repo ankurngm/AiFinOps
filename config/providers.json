@@ -2,6 +2,24 @@
   "openrouter": {
     "displayName": "OpenRouter",
     "baseUrl": "https://openrouter.ai/api/v1",
-    "apiKeyEnvVar": "OPENROUTER_API_KEY"
+    "apiKeyEnvVar": "OPENROUTER_API_KEY",
+    "requiresPricingCheck": false
+  },
+  "ollama": {
+    "displayName": "Ollama",
+    "baseUrl": "http://localhost:11434/v1",
+    "requiresPricingCheck": false
+  },
+  "openai": {
+    "displayName": "OpenAI",
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKeyEnvVar": "OPENAI_API_KEY",
+    "requiresPricingCheck": true
+  },
+  "anthropic": {
+    "displayName": "Anthropic",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "apiKeyEnvVar": "ANTHROPIC_API_KEY",
+    "requiresPricingCheck": true
   }
 }

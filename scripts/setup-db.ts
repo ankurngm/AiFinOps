@@ -56,6 +56,10 @@ const CREATE_TABLE_SQL = `
   CREATE INDEX IF NOT EXISTS idx_requests_tenant_app ON requests (tenant_id, application_id);
   CREATE INDEX IF NOT EXISTS idx_requests_transaction_id ON requests (transaction_id);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_requests_request_id ON requests (request_id);
+
+  -- Support the logs dashboard's status/model filters and dropdown queries.
+  CREATE INDEX IF NOT EXISTS idx_requests_status ON requests (status);
+  CREATE INDEX IF NOT EXISTS idx_requests_resolved_model_id ON requests (resolved_model_id);
 `;
 
 async function main(): Promise<void> {
