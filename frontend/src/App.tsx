@@ -38,7 +38,7 @@ export default function App() {
         <div className="brand">
           <span className="mark">$</span>
           <h1>AiFinOps</h1>
-          <span className="sub">AI SPEND ACCOUNTABILITY &amp; AUDIT</span>
+          <span className="sub">AI GOVERNANCE &amp; SPEND ACCOUNTABILITY</span>
         </div>
         <div className="masthead-right">
           Providers connected: <b>{filterOptions?.providers.length ?? '—'}</b>
