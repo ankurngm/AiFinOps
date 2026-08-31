@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useLogsFilters, useLogsList } from './api/client';
 import type { LogsFilters } from './api/types';
-import { ExportButtons } from './components/ExportButtons';
-import { FiltersBar } from './components/FiltersBar';
+import { DownloadMenu } from './components/DownloadMenu';
+import { FilterPills } from './components/FilterPills';
+import { FiltersPopoverButton } from './components/FiltersPopoverButton';
 import { LogsTable } from './components/LogsTable';
 import { Pagination } from './components/Pagination';
 import { RowDetailDrawer } from './components/RowDetailDrawer';
@@ -56,27 +57,27 @@ export default function App() {
         </p>
       </div>
 
-      <div className="panel">
-        <FiltersBar
-          filters={filters}
-          onChange={handleFiltersChange}
-          filterOptions={filterOptions}
-        />
-        <div className="filters-foot">
-          <button type="button" className="clear-link" onClick={() => handleFiltersChange({})}>
-            Clear all filters
-          </button>
-          <ExportButtons filters={filters} />
-        </div>
-      </div>
-
       {isError && (
         <div className="error-banner">
           {error instanceof Error ? error.message : 'Failed to load logs.'}
         </div>
       )}
 
-      <div className="panel" style={{ marginTop: 16 }}>
+      <div className="panel">
+        <div className="toolbar">
+          <div className="pills-row">
+            <FilterPills filters={filters} onChange={handleFiltersChange} />
+          </div>
+          <div className="toolbar-actions">
+            <FiltersPopoverButton
+              filters={filters}
+              onChange={handleFiltersChange}
+              filterOptions={filterOptions}
+            />
+            <DownloadMenu filters={filters} />
+          </div>
+        </div>
+
         <LogsTable rows={data?.rows ?? []} isLoading={isLoading} onSelectRow={setSelectedLogId} />
         <Pagination
           page={page}
