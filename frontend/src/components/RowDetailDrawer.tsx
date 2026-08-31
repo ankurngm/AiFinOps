@@ -5,13 +5,11 @@ interface RowDetailDrawerProps {
   onClose: () => void;
 }
 
-function JsonBlock({ label, value }: { label: string; value: unknown }) {
+function MetaCell({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div>
-      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</h3>
-      <pre className="max-h-96 overflow-auto rounded-md bg-slate-900 p-3 text-xs text-slate-100">
-        {value === null || value === undefined ? '—' : JSON.stringify(value, null, 2)}
-      </pre>
+    <div className="mm">
+      <div className="l">{label}</div>
+      <div className="v">{value}</div>
     </div>
   );
 }
@@ -22,87 +20,70 @@ export function RowDetailDrawer({ logId, onClose }: RowDetailDrawerProps) {
   if (logId === null) return null;
 
   return (
-    <div className="fixed inset-0 z-20 flex justify-end bg-black/30" onClick={onClose}>
-      <div
-        className="h-full w-full max-w-2xl overflow-y-auto bg-white p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Log #{logId}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-2 py-1 text-slate-500 hover:bg-slate-100"
-          >
-            Close
+    <div className="drawer-overlay" onClick={onClose}>
+      <div className="drawer-box" onClick={(e) => e.stopPropagation()}>
+        <div className="drawer-head">
+          <div>
+            <div className="dt">Request Detail</div>
+            <div
+              className="mono-dim"
+              style={{ fontFamily: 'var(--mono)', fontSize: 11, marginTop: 2 }}
+            >
+              #{logId}
+              {log?.requestId ? ` · ${log.requestId}` : ''}
+            </div>
+          </div>
+          <button type="button" className="drawer-close" onClick={onClose}>
+            ✕
           </button>
         </div>
 
-        {isLoading && <p className="text-sm text-slate-400">Loading…</p>}
+        {isLoading && <div className="drawer-body mono-dim">Loading…</div>}
 
         {log && (
-          <div className="space-y-4">
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-              <div>
-                <dt className="text-slate-500">Time (UTC)</dt>
-                <dd>{log.createdAt}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Status</dt>
-                <dd>{log.status}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Provider / Model</dt>
-                <dd className="font-mono text-xs">
-                  {log.provider} / {log.resolvedModelId}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Latency</dt>
-                <dd>{log.latencyMs} ms</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Cost</dt>
-                <dd>{log.cost === null ? '—' : `$${log.cost.toFixed(6)}`}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Tokens (prompt/completion/total)</dt>
-                <dd>
-                  {log.promptTokens ?? '—'} / {log.completionTokens ?? '—'} /{' '}
-                  {log.totalTokens ?? '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Tenant / Application / Module</dt>
-                <dd>
-                  {log.tenantId ?? '—'} / {log.applicationId ?? '—'} / {log.moduleId ?? '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Region / Environment</dt>
-                <dd>
-                  {log.regionId ?? '—'} / {log.environment ?? '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Process / User</dt>
-                <dd>{log.processOrUserId ?? '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Transaction</dt>
-                <dd>{log.transactionId ?? '—'}</dd>
-              </div>
-              {log.errorMessage && (
-                <div className="col-span-2">
-                  <dt className="text-slate-500">Error</dt>
-                  <dd className="text-rose-600">{log.errorMessage}</dd>
-                </div>
-              )}
-            </dl>
+          <>
+            <div className="drawer-meta">
+              <MetaCell label="Time (UTC)" value={log.createdAt} />
+              <MetaCell
+                label="Status"
+                value={`${log.httpStatusCode ?? '—'} ${log.status.toUpperCase()}`}
+              />
+              <MetaCell
+                label="Provider / Model"
+                value={`${log.provider} / ${log.resolvedModelId}`}
+              />
+              <MetaCell label="Latency" value={`${log.latencyMs} ms`} />
+              <MetaCell label="Cost" value={log.cost === null ? '—' : `$${log.cost.toFixed(6)}`} />
+              <MetaCell
+                label="Tokens (prompt/completion/total)"
+                value={`${log.promptTokens ?? '—'} / ${log.completionTokens ?? '—'} / ${log.totalTokens ?? '—'}`}
+              />
+              <MetaCell
+                label="Tenant / Application / Module"
+                value={`${log.tenantId ?? '—'} / ${log.applicationId ?? '—'} / ${log.moduleId ?? '—'}`}
+              />
+              <MetaCell
+                label="Region / Environment"
+                value={`${log.regionId ?? '—'} / ${log.environment ?? '—'}`}
+              />
+              <MetaCell label="Process / User" value={log.processOrUserId ?? '—'} />
+              <MetaCell label="Transaction" value={log.transactionId ?? '—'} />
+            </div>
 
-            <JsonBlock label="Request body" value={log.requestBody} />
-            <JsonBlock label="Response body" value={log.responseBody} />
-          </div>
+            {log.errorMessage && <div className="drawer-error">{log.errorMessage}</div>}
+
+            <div className="drawer-body">
+              <div className="sec-title">Request body</div>
+              <div className="code-block">
+                {log.requestBody === null ? '—' : JSON.stringify(log.requestBody, null, 2)}
+              </div>
+
+              <div className="sec-title">Response body</div>
+              <div className="code-block">
+                {log.responseBody === null ? '—' : JSON.stringify(log.responseBody, null, 2)}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

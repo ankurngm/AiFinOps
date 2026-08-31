@@ -1,37 +1,34 @@
 interface PaginationProps {
   page: number;
+  pageSize: number;
   totalPages: number;
   totalRows: number;
   onPageChange: (page: number) => void;
 }
 
-const buttonClass =
-  'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 ' +
-  'disabled:cursor-not-allowed disabled:opacity-40 enabled:hover:bg-slate-50';
+export function Pagination({
+  page,
+  pageSize,
+  totalPages,
+  totalRows,
+  onPageChange,
+}: PaginationProps) {
+  const shown = totalRows === 0 ? 0 : Math.min(pageSize, totalRows - (page - 1) * pageSize);
 
-export function Pagination({ page, totalPages, totalRows, onPageChange }: PaginationProps) {
   return (
-    <div className="flex items-center justify-between text-sm text-slate-600">
+    <div className="foot-row">
       <span>
-        {totalRows.toLocaleString()} {totalRows === 1 ? 'row' : 'rows'}
-        {totalPages > 0 ? ` — page ${page} of ${totalPages}` : ''}
+        Showing {shown} of {totalRows.toLocaleString()} requests
       </span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          className={buttonClass}
-          disabled={page <= 1}
-          onClick={() => onPageChange(page - 1)}
-        >
-          Previous
+      <div className="foot-nav">
+        <span>
+          page {totalPages === 0 ? 0 : page} of {totalPages}
+        </span>
+        <button type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+          ‹
         </button>
-        <button
-          type="button"
-          className={buttonClass}
-          disabled={page >= totalPages}
-          onClick={() => onPageChange(page + 1)}
-        >
-          Next
+        <button type="button" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+          ›
         </button>
       </div>
     </div>

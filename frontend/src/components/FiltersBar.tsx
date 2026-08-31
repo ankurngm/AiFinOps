@@ -17,11 +17,6 @@ const TEXT_SEARCH_FIELDS: Array<{ key: keyof LogsFilters; label: string; placeho
   { key: 'transactionId', label: 'Transaction', placeholder: 'e.g. tx_abc123' },
 ];
 
-const inputClass =
-  'w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 ' +
-  'placeholder:text-slate-400 focus:border-slate-500 focus:outline-none';
-const labelClass = 'mb-1 block text-xs font-medium text-slate-500';
-
 function toStartOfDayUtc(dateOnly: string): string {
   return `${dateOnly}T00:00:00.000Z`;
 }
@@ -69,7 +64,6 @@ function DebouncedTextInput({
   return (
     <input
       type="text"
-      className={inputClass}
       placeholder={placeholder}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
@@ -80,100 +74,83 @@ function DebouncedTextInput({
 export function FiltersBar({ filters, onChange, filterOptions }: FiltersBarProps) {
   const update = (patch: LogsFilters) => onChange({ ...filters, ...patch });
 
-  const clearAll = () => onChange({});
-
   return (
-    <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <div>
-          <label className={labelClass}>From</label>
-          <input
-            type="date"
-            className={inputClass}
-            value={toDateOnly(filters.startDate)}
-            onChange={(e) =>
-              update({ startDate: e.target.value ? toStartOfDayUtc(e.target.value) : undefined })
-            }
-          />
-        </div>
-        <div>
-          <label className={labelClass}>To</label>
-          <input
-            type="date"
-            className={inputClass}
-            value={toDateOnly(filters.endDate)}
-            onChange={(e) =>
-              update({ endDate: e.target.value ? toEndOfDayUtc(e.target.value) : undefined })
-            }
-          />
-        </div>
-        <div>
-          <label className={labelClass}>Provider</label>
-          <select
-            className={inputClass}
-            value={filters.provider ?? ''}
-            onChange={(e) => update({ provider: e.target.value || undefined })}
-          >
-            <option value="">All</option>
-            {filterOptions?.providers.map((provider) => (
-              <option key={provider} value={provider}>
-                {provider}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={labelClass}>Status</label>
-          <select
-            className={inputClass}
-            value={filters.status ?? ''}
-            onChange={(e) =>
-              update({ status: (e.target.value || undefined) as LogsFilters['status'] })
-            }
-          >
-            <option value="">All</option>
-            {filterOptions?.statuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={labelClass}>Model</label>
-          <select
-            className={inputClass}
-            value={filters.resolvedModelId ?? ''}
-            onChange={(e) => update({ resolvedModelId: e.target.value || undefined })}
-          >
-            <option value="">All</option>
-            {filterOptions?.resolvedModelIds.map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {TEXT_SEARCH_FIELDS.map(({ key, label, placeholder }) => (
-          <div key={key}>
-            <label className={labelClass}>{label}</label>
-            <DebouncedTextInput
-              value={filters[key] ?? ''}
-              placeholder={placeholder}
-              onCommit={(value) => update({ [key]: value || undefined })}
-            />
-          </div>
-        ))}
+    <div className="filters">
+      <div className="field">
+        <label>From</label>
+        <input
+          type="date"
+          value={toDateOnly(filters.startDate)}
+          onChange={(e) =>
+            update({ startDate: e.target.value ? toStartOfDayUtc(e.target.value) : undefined })
+          }
+        />
+      </div>
+      <div className="field">
+        <label>To</label>
+        <input
+          type="date"
+          value={toDateOnly(filters.endDate)}
+          onChange={(e) =>
+            update({ endDate: e.target.value ? toEndOfDayUtc(e.target.value) : undefined })
+          }
+        />
+      </div>
+      <div className="field">
+        <label>Provider</label>
+        <select
+          value={filters.provider ?? ''}
+          onChange={(e) => update({ provider: e.target.value || undefined })}
+        >
+          <option value="">All</option>
+          {filterOptions?.providers.map((provider) => (
+            <option key={provider} value={provider}>
+              {provider}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label>Status</label>
+        <select
+          value={filters.status ?? ''}
+          onChange={(e) =>
+            update({ status: (e.target.value || undefined) as LogsFilters['status'] })
+          }
+        >
+          <option value="">All</option>
+          {filterOptions?.statuses.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label>Model</label>
+        <select
+          value={filters.resolvedModelId ?? ''}
+          onChange={(e) => update({ resolvedModelId: e.target.value || undefined })}
+        >
+          <option value="">All</option>
+          {filterOptions?.resolvedModelIds.map((model) => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <button
-        type="button"
-        onClick={clearAll}
-        className="mt-3 text-xs font-medium text-slate-500 hover:text-slate-800"
-      >
-        Clear all filters
-      </button>
+      {TEXT_SEARCH_FIELDS.map(({ key, label, placeholder }) => (
+        <div className="field" key={key}>
+          <label>{label}</label>
+          <DebouncedTextInput
+            value={filters[key] ?? ''}
+            placeholder={placeholder}
+            onCommit={(value) => update({ [key]: value || undefined })}
+          />
+        </div>
+      ))}
     </div>
   );
 }

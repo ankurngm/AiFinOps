@@ -6,33 +6,26 @@ interface LogsTableProps {
   onSelectRow: (id: string) => void;
 }
 
+function StatusPill({ row }: { row: LogListRow }) {
+  const code = row.httpStatusCode ?? '—';
+  return (
+    <span className={row.status === 'success' ? 'pill ok' : 'pill err'}>
+      {code} {row.status.toUpperCase()}
+    </span>
+  );
+}
+
 const COLUMNS: Array<{ header: string; render: (row: LogListRow) => React.ReactNode }> = [
   // Rendered exactly as returned by the API (UTC ISO string, same value the
   // CSV/JSONL exports write) — no timezone/locale conversion, so the table
   // and the exported files always show the same timestamp for the same row.
-  { header: 'Time (UTC)', render: (row) => row.createdAt },
+  { header: 'Time (UTC)', render: (row) => <span className="mono-dim">{row.createdAt}</span> },
   { header: 'Provider', render: (row) => row.provider },
-  {
-    header: 'Model',
-    render: (row) => <span className="font-mono text-xs">{row.resolvedModelId}</span>,
-  },
-  {
-    header: 'Status',
-    render: (row) => (
-      <span
-        className={
-          row.status === 'success'
-            ? 'rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700'
-            : 'rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700'
-        }
-      >
-        {row.status}
-      </span>
-    ),
-  },
-  { header: 'Tokens', render: (row) => row.totalTokens ?? '—' },
+  { header: 'Model', render: (row) => row.resolvedModelId },
+  { header: 'Status', render: (row) => <StatusPill row={row} /> },
+  { header: 'Tokens', render: (row) => <span className="mono-dim">{row.totalTokens ?? '—'}</span> },
   { header: 'Cost', render: (row) => (row.cost === null ? '—' : `$${row.cost.toFixed(6)}`) },
-  { header: 'Latency', render: (row) => `${row.latencyMs} ms` },
+  { header: 'Latency', render: (row) => <span className="mono-dim">{row.latencyMs} ms</span> },
   { header: 'Tenant', render: (row) => row.tenantId ?? '—' },
   { header: 'Application', render: (row) => row.applicationId ?? '—' },
   { header: 'Module', render: (row) => row.moduleId ?? '—' },
@@ -43,44 +36,38 @@ const COLUMNS: Array<{ header: string; render: (row: LogListRow) => React.ReactN
 
 export function LogsTable({ rows, isLoading, onSelectRow }: LogsTableProps) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="w-full min-w-max text-left text-sm">
-        <thead className="bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-500">
+    <div className="table-scroll">
+      <table>
+        <thead>
           <tr>
             {COLUMNS.map((column) => (
-              <th key={column.header} className="whitespace-nowrap px-3 py-2">
-                {column.header}
-              </th>
+              <th key={column.header}>{column.header}</th>
             ))}
+            <th></th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100">
+        <tbody>
           {isLoading && (
-            <tr>
-              <td colSpan={COLUMNS.length} className="px-3 py-6 text-center text-slate-400">
-                Loading…
-              </td>
+            <tr className="empty-row">
+              <td colSpan={COLUMNS.length + 1}>Loading…</td>
             </tr>
           )}
           {!isLoading && rows.length === 0 && (
-            <tr>
-              <td colSpan={COLUMNS.length} className="px-3 py-6 text-center text-slate-400">
-                No logs match the current filters.
-              </td>
+            <tr className="empty-row">
+              <td colSpan={COLUMNS.length + 1}>No logs match the current filters.</td>
             </tr>
           )}
           {!isLoading &&
             rows.map((row) => (
-              <tr
-                key={row.id}
-                onClick={() => onSelectRow(row.id)}
-                className="cursor-pointer hover:bg-slate-50"
-              >
+              <tr key={row.id}>
                 {COLUMNS.map((column) => (
-                  <td key={column.header} className="whitespace-nowrap px-3 py-2">
-                    {column.render(row)}
-                  </td>
+                  <td key={column.header}>{column.render(row)}</td>
                 ))}
+                <td className="row-actions">
+                  <button type="button" className="view-btn" onClick={() => onSelectRow(row.id)}>
+                    view
+                  </button>
+                </td>
               </tr>
             ))}
         </tbody>
