@@ -1,5 +1,7 @@
 # 💸 AiFinOps
 
+![AiFinOps Dashboard — Request Log](assets/screenshots/dashboard_v1_0_0.png)
+
 AiFinOps is a self-hosted, OpenAI-compatible **LLM gateway built for cost governance**. Every
 call your team makes to an LLM — provider, model, tokens, cost — passes through one audited
 front door, gated by an allow-list you control, before it ever reaches a provider.
@@ -36,10 +38,11 @@ out and it's a `400`, no matter what the provider itself would accept:
 "openrouter": ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"]
 ```
 
-**v1 ships today:** full request-level cost logging for OpenRouter, with optional attribution
-tags (tenant, application, module, user, transaction, region, environment) captured on every
-call, plus a logs dashboard for searching and inspecting that data without SQL. **Next up:**
-rolling it up into spend/volume trends over time — see [Roadmap](#roadmap) below.
+**v1.0.0 ships today:** full request-level cost logging across OpenRouter, OpenAI, Anthropic, and
+Ollama, with optional attribution tags (tenant, application, module, user, transaction, region,
+environment) captured on every call, plus a logs dashboard for searching and inspecting that data
+without SQL. **Next up:** rolling it up into spend/volume trends over time — see
+[Roadmap](#roadmap) below.
 
 → For exactly how requests are validated, routed, and logged, see
 [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -94,10 +97,6 @@ its dev server proxies API calls to the backend on `:8787`.
 
 Near-term priorities:
 
-- **Additional provider support** — native Anthropic, Gemini, and other transformers, each with
-  a maintained pricing table for cost accounting beyond what OpenRouter reports today.
-- **Cost attribution to tenant / application / user / transaction** — roll up spend on top of
-  today's request-level logging.
 - **Spend limits at the model and application level** — configurable soft and hard limits, so
   spend can be capped before it happens.
 - **Rolling spend/volume trends on the dashboard** — the logs screen (see
