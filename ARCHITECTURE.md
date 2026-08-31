@@ -517,7 +517,7 @@ asynchronously under the hood.
 ```json
 {
   "status": "ok",
-  "version": "0.1.4",
+  "version": "1.0.0",
   "uptimeSeconds": 3421,
   "database": "reachable",
   "providers": { "openrouter": "ready" }

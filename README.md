@@ -115,33 +115,22 @@ of this additive, not a rewrite.
 
 All notable changes to this project are documented here. Dates are in `YYYY-MM-DD` format.
 
-### 0.1.4 — 2026-08-29
-
-- **A logs dashboard** — search and filter every call by date, provider, model, status, tenant,
-  application, region, or user, without writing SQL. Free-text fields match anywhere in the
-  value, Splunk-style, so partial names find what you're looking for.
-- **Inspect any call in full** — click a row to see its complete request and response, not just
-  the summary fields.
-- **Export what you're looking at** — a CSV of the filtered results for spreadsheet analysis, or
-  a full JSONL export with complete, untruncated request/response bodies for deeper investigation.
-
-### 0.1.3 — 2026-09-06
+### 1.0.0 — 2026-08-30
 
 - **Native OpenAI and Anthropic support** — call either directly, no OpenRouter hop required,
   under the exact same allow-list, logging, and attribution guarantees as every other provider.
-- **Built-in pricing for both providers' current model lineups** — cost is computed automatically
-  from published rates, no manual entry needed to get accurate spend data from day one.
-- **New runnable examples** showing cost attribution against OpenAI and Anthropic directly, in
-  both Node.js and curl.
-
-### 0.1.2 — 2026-08-30
-
 - **Ollama support** — run models locally, or via Ollama Cloud.
-- **New runnable examples** showing cost attribution against a free local model, in both Node.js
-  and curl.
+- **A logs dashboard** — search and filter every call by date, provider, model, status, tenant,
+  application, region, or user, without writing SQL. Export data as CSV or, JSONL(untruncated
+  request/response bodies for deeper investigation) formats.
+- **Built-in pricing for OpenAI and Anthropic's current model lineups** — cost is computed
+  automatically from published rates, no manual entry needed to get accurate spend data from day
+  one.
 - **Bring your own negotiated pricing for exact cost visibility.** Supports, if your enterprise has
   negotiated custom or discounted rates with a provider — including separate rates for
   cached-token discounts and cache-write costs.
+- **New runnable examples** showing cost attribution against OpenAI, Anthropic, and a free local
+  Ollama model, in both Node.js and curl.
 
 ### 0.1.1 — 2026-08-23
 
