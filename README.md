@@ -61,9 +61,10 @@ npm run setup-db
 npm run dev
 ```
 
-> ⚠️ **v1 has no inbound authentication.** Anyone who can reach this port can make LLM calls
-> billed to your account. Don't expose it beyond a trusted network until authentication ships —
-> see [Roadmap](#roadmap).
+> ⚠️ **v1 has no inbound authentication** (same default as most self-hosted LLM gateways, e.g.
+> LiteLLM without a master key). Anyone who can reach this port can make LLM calls billed to
+> your account. Don't expose it beyond a trusted network until authentication ships — see
+> [Roadmap](#roadmap).
 
 Then call it like any OpenAI Chat Completions endpoint, using a gateway-flavored `model` string
 (`"<provider>/<providerModelId>"`):
