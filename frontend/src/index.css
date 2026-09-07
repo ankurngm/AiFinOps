@@ -417,6 +417,10 @@ tbody tr:hover {
   background: #fbfaf7;
 }
 
+.clickable-row {
+  cursor: pointer;
+}
+
 .empty-row td {
   text-align: center;
   color: var(--ink-soft);
