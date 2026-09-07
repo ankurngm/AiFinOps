@@ -11,6 +11,13 @@
   --rust: #9c3b2e;
   --rust-soft: #f3ded9;
   --ink-soft: #5b5f5a;
+  /* Categorical series colors for provider charts — validated for CVD-safe adjacent
+     separation and light-surface contrast (see dataviz skill's palette validator).
+     Fixed order, never cycled or reassigned. */
+  --series-openrouter: #2a78d6;
+  --series-openai: #eb6834;
+  --series-anthropic: #1baf7a;
+  --series-ollama: #eda100;
   --mono: 'IBM Plex Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
   --serif: 'Source Serif 4', 'Iowan Old Style', Georgia, serif;
   --sans: 'IBM Plex Sans', -apple-system, 'Segoe UI', sans-serif;
@@ -707,4 +714,301 @@ tbody tr:hover {
 
 .code-block + .sec-title {
   margin-top: 16px;
+}
+
+/* Spend Overview — sub-tabs */
+.subtabs {
+  display: flex;
+  gap: 18px;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.subtab {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 0 10px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  border-bottom: 2px solid transparent;
+  user-select: none;
+}
+
+.subtab.active {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--ledger);
+}
+
+.subtab:hover:not(.active) {
+  color: var(--ink);
+}
+
+.subview-note {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  font-style: italic;
+  margin-bottom: 14px;
+}
+
+/* Spend Overview — KPI tiles */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.kpi {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 16px 18px;
+}
+
+.kpi.lead {
+  border-left: 4px solid var(--rust);
+}
+
+.kpi .label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.kpi .value {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.delta {
+  font-family: var(--mono);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.delta.up {
+  color: var(--rust);
+}
+
+.delta.down {
+  color: var(--ledger);
+}
+
+.delta.flat {
+  color: var(--ink-soft);
+}
+
+/* Spend Overview — daily spend chart */
+.chart-wrap {
+  height: 200px;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 10px 4px 0;
+  border-bottom: 1px solid var(--ink);
+  position: relative;
+}
+
+.chart-bar-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 2px;
+}
+
+.cbar {
+  width: 100%;
+}
+
+.cbar-top {
+  border-radius: 3px 3px 0 0;
+}
+
+.chart-labels {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chart-labels span {
+  flex: 1;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.legend .li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.legend .sw {
+  width: 9px;
+  height: 9px;
+}
+
+/* Spend Overview — two-column panels, model/provider rows */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.two-col > .panel {
+  margin-top: 0;
+}
+
+.model-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.model-row:last-child {
+  border-bottom: none;
+}
+
+.model-row .mname {
+  color: var(--ink);
+}
+
+.model-row .mstat {
+  color: var(--ink-soft);
+  display: flex;
+  gap: 14px;
+}
+
+/* Spend Overview — top spenders bar list */
+.panel-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.seg-toggle {
+  display: flex;
+  border: 1px solid var(--ink);
+}
+
+.seg-toggle button {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 13px;
+  border: none;
+  background: var(--panel);
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-right: 1px solid var(--ink);
+}
+
+.seg-toggle button:last-child {
+  border-right: none;
+}
+
+.seg-toggle button.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.bar-list .bar-row {
+  margin-bottom: 14px;
+}
+
+.bar-list .bar-row:last-child {
+  margin-bottom: 0;
+}
+
+.bar-row .bar-top {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.bar-row .bar-top .name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.bar-row .bar-top .amt {
+  color: var(--ink-soft);
+  display: flex;
+  gap: 10px;
+}
+
+.bar-track {
+  height: 8px;
+  background: var(--line-soft);
+  position: relative;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--ledger);
+}
+
+/* Spend Overview — chargeback rollup table */
+.rollup-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.rollup-table th {
+  text-align: right;
+  padding: 8px 10px;
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  border-bottom: 1.5px solid var(--ink);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rollup-table th:first-child {
+  text-align: left;
+}
+
+.rollup-table td {
+  text-align: right;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.rollup-table td:first-child {
+  text-align: left;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rollup-table td.wasted {
+  color: var(--rust);
 }

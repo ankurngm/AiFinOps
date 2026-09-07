@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { useLogsFilters, useLogsList } from './api/client';
 import type { LogsFilters } from './api/types';
-import { ComingSoonPanel } from './components/ComingSoonPanel';
-import { DownloadMenu } from './components/DownloadMenu';
-import { FilterPills } from './components/FilterPills';
-import { FiltersPopoverButton } from './components/FiltersPopoverButton';
+import { FilterToolbar } from './components/FilterToolbar';
 import { LogsTable } from './components/LogsTable';
+import { DetailsPanel } from './components/overview/DetailsPanel';
+import { SummaryPanel } from './components/overview/SummaryPanel';
 import { Pagination } from './components/Pagination';
 import { ReportBuilderView } from './components/ReportBuilderView';
 import { RowDetailDrawer } from './components/RowDetailDrawer';
@@ -26,7 +25,9 @@ const TABS: Array<{
     eyebrow: 'Finance · At A Glance',
     heading: 'Spend Overview',
     description:
-      'Aggregate spend, usage, and trend views across every call the gateway has proxied.',
+      'Summary is the standard 30-day pulse-check everyone glances at first. Details is where ' +
+      'you drill into who is responsible, what was wasted, and how it breaks down — scoped to ' +
+      'the filter below.',
   },
   {
     key: 'logs',
@@ -47,15 +48,26 @@ const TABS: Array<{
   },
 ];
 
+type OverviewSubTab = 'summary' | 'details';
+
+const OVERVIEW_SUBTABS: Array<{ key: OverviewSubTab; label: string }> = [
+  { key: 'summary', label: 'Summary' },
+  { key: 'details', label: 'Details' },
+];
+
 export default function App() {
   const { tab, setTab, filters, setFilters } = useAppUrlState();
   const [page, setPage] = useState(1);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [overviewSubTab, setOverviewSubTab] = useState<OverviewSubTab>('summary');
 
   const { data: filterOptions } = useLogsFilters();
   const { data, isLoading, isError, error } = useLogsList(filters, page, PAGE_SIZE);
 
   const activeTab = TABS.find((t) => t.key === tab) ?? TABS[0]!;
+  // Filters only ever apply to Overview's Details and to Logs/Report Builder — Summary is a
+  // fixed 30-day snapshot, so the filter bar has nothing to do there and stays hidden.
+  const showToolbar = tab !== 'overview' || overviewSubTab === 'details';
 
   const handleFiltersChange = (next: LogsFilters) => {
     setFilters(next);
@@ -97,53 +109,69 @@ export default function App() {
         <p>{activeTab.description}</p>
       </div>
 
+      {tab === 'overview' && (
+        <div className="subtabs" role="tablist">
+          {OVERVIEW_SUBTABS.map((sub) => (
+            <div
+              key={sub.key}
+              role="tab"
+              aria-selected={overviewSubTab === sub.key}
+              className={overviewSubTab === sub.key ? 'subtab active' : 'subtab'}
+              onClick={() => setOverviewSubTab(sub.key)}
+            >
+              {sub.label}
+            </div>
+          ))}
+        </div>
+      )}
+
       {isError && tab === 'logs' && (
         <div className="error-banner">
           {error instanceof Error ? error.message : 'Failed to load logs.'}
         </div>
       )}
 
-      <div className="panel">
-        <div className="toolbar">
-          <div className="pills-row">
-            <FilterPills filters={filters} onChange={handleFiltersChange} />
-          </div>
-          <div className="toolbar-actions">
-            <FiltersPopoverButton
+      {showToolbar &&
+        (tab === 'overview' ? (
+          <FilterToolbar
+            filters={filters}
+            onChange={handleFiltersChange}
+            filterOptions={filterOptions}
+          />
+        ) : (
+          <div className="panel">
+            <FilterToolbar
               filters={filters}
               onChange={handleFiltersChange}
               filterOptions={filterOptions}
+              showDownload={tab === 'logs'}
             />
-            {tab === 'logs' && <DownloadMenu filters={filters} />}
+
+            {tab === 'logs' && (
+              <>
+                <LogsTable
+                  rows={data?.rows ?? []}
+                  isLoading={isLoading}
+                  onSelectRow={setSelectedLogId}
+                />
+                <Pagination
+                  page={page}
+                  pageSize={PAGE_SIZE}
+                  totalPages={data?.pagination.totalPages ?? 0}
+                  totalRows={data?.pagination.totalRows ?? 0}
+                  onPageChange={setPage}
+                />
+              </>
+            )}
+
+            <ReportBuilderView filters={filters} active={tab === 'pivot'} />
           </div>
-        </div>
+        ))}
 
-        {tab === 'overview' && (
-          <ComingSoonPanel
-            title="Coming soon"
-            description="Spend Overview will roll requests up into cost/volume trends, top spenders, and anomaly call-outs — filtered by the same criteria as Logs."
-          />
-        )}
-
-        {tab === 'logs' && (
-          <>
-            <LogsTable
-              rows={data?.rows ?? []}
-              isLoading={isLoading}
-              onSelectRow={setSelectedLogId}
-            />
-            <Pagination
-              page={page}
-              pageSize={PAGE_SIZE}
-              totalPages={data?.pagination.totalPages ?? 0}
-              totalRows={data?.pagination.totalRows ?? 0}
-              onPageChange={setPage}
-            />
-          </>
-        )}
-
-        <ReportBuilderView filters={filters} active={tab === 'pivot'} />
-      </div>
+      {tab === 'overview' && overviewSubTab === 'summary' && <SummaryPanel />}
+      {tab === 'overview' && overviewSubTab === 'details' && (
+        <DetailsPanel filters={filters} active />
+      )}
 
       <RowDetailDrawer logId={selectedLogId} onClose={() => setSelectedLogId(null)} />
     </div>

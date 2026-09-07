@@ -5,6 +5,8 @@ import type {
   LogsFiltersResponse,
   LogsListResponse,
   LogsPivotDataResponse,
+  OverviewDetailsResponse,
+  OverviewSummaryResponse,
 } from './types';
 
 function toQueryParams(
@@ -58,6 +60,23 @@ export function useLogsPivotData(filters: LogsFilters, enabled: boolean) {
   return useQuery({
     queryKey: ['logs-pivot-data', params.toString()],
     queryFn: () => fetchJson<LogsPivotDataResponse>(`/api/logs/pivot-data?${params.toString()}`),
+    enabled,
+  });
+}
+
+export function useOverviewSummary() {
+  return useQuery({
+    queryKey: ['overview-summary'],
+    queryFn: () => fetchJson<OverviewSummaryResponse>('/api/overview/summary'),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useOverviewDetails(filters: LogsFilters, enabled: boolean) {
+  const params = toQueryParams(filters);
+  return useQuery({
+    queryKey: ['overview-details', params.toString()],
+    queryFn: () => fetchJson<OverviewDetailsResponse>(`/api/overview/details?${params.toString()}`),
     enabled,
   });
 }

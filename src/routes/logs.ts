@@ -46,8 +46,12 @@ export async function logsRoute(app: FastifyInstance): Promise<void> {
 
   app.get('/api/logs/filters', async (_request, reply) => {
     const resolvedModelIds = await getDistinctResolvedModelIds(pool);
+    const providerDisplayNames = Object.fromEntries(
+      Object.entries(providers).map(([id, config]) => [id, config.displayName]),
+    );
     return reply.send({
       providers: Object.keys(providers),
+      providerDisplayNames,
       statuses: ['success', 'error'],
       resolvedModelIds,
     });

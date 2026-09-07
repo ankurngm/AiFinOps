@@ -18,6 +18,7 @@ import { chatCompletionsRoute } from './routes/chatCompletions.js';
 import { healthRoute } from './routes/health.js';
 import { logsRoute } from './routes/logs.js';
 import { logsExportRoute } from './routes/logsExport.js';
+import { overviewRoute } from './routes/overview.js';
 
 function logProviderReadiness(): void {
   const { ready, notReady } = getProviderReadiness();
@@ -84,6 +85,7 @@ async function main(): Promise<void> {
   await app.register(healthRoute);
   await app.register(logsRoute);
   await app.register(logsExportRoute);
+  await app.register(overviewRoute);
 
   const frontendDist = join(process.cwd(), 'frontend/dist');
   if (existsSync(join(frontendDist, 'index.html'))) {
