@@ -173,15 +173,19 @@ const EXPORT_BATCH_SIZE = 500;
 
 /**
  * Streams every row matching `filters` in batches, using keyset pagination
- * (`id > lastId`) rather than OFFSET — an export can walk an unbounded
- * number of rows, and OFFSET cost grows linearly with how far in you are,
- * while keyset stays flat per batch regardless of position.
+ * (`id > lastId`) rather than OFFSET — a walk over an unbounded number of
+ * rows this way stays flat cost per batch regardless of position, where
+ * OFFSET cost grows linearly with how far in you are. Shared by the CSV/JSONL
+ * exports (full row, via `mapDetailRow`) and the pivot-data endpoint (list
+ * columns only, via `mapListRow`) so both stream the same way.
  */
-export async function* iterateLogsForExport(
+async function* iterateLogRows<T>(
   pool: Pool,
   filters: LogsFilters,
-  batchSize = EXPORT_BATCH_SIZE,
-): AsyncGenerator<LogDetail> {
+  columns: string,
+  mapRow: (row: RawLogRow) => T,
+  batchSize: number,
+): AsyncGenerator<T> {
   const { whereSql, params } = buildLogsWhereClause(filters);
   let lastId = '0';
 
@@ -190,16 +194,34 @@ export async function* iterateLogsForExport(
       ? `${whereSql} AND id > $${params.length + 1}`
       : `WHERE id > $${params.length + 1}`;
     const { rows } = await pool.query<RawLogRow>(
-      `SELECT * FROM requests ${keysetClause} ORDER BY id ASC LIMIT $${params.length + 2}`,
+      `SELECT ${columns} FROM requests ${keysetClause} ORDER BY id ASC LIMIT $${params.length + 2}`,
       [...params, lastId, batchSize],
     );
 
     if (rows.length === 0) return;
-    for (const row of rows) yield mapDetailRow(row);
+    for (const row of rows) yield mapRow(row);
 
     const lastRow = rows[rows.length - 1];
     if (!lastRow) return;
     lastId = lastRow.id;
     if (rows.length < batchSize) return;
   }
+}
+
+export function iterateLogsForExport(
+  pool: Pool,
+  filters: LogsFilters,
+  batchSize = EXPORT_BATCH_SIZE,
+): AsyncGenerator<LogDetail> {
+  return iterateLogRows(pool, filters, '*', mapDetailRow, batchSize);
+}
+
+/** Same streaming shape as `iterateLogsForExport`, but list columns only — no request/response
+ * bodies — for consumers like the pivot table that need every matching row but not its payload. */
+export function iterateLogsSummary(
+  pool: Pool,
+  filters: LogsFilters,
+  batchSize = EXPORT_BATCH_SIZE,
+): AsyncGenerator<LogListRow> {
+  return iterateLogRows(pool, filters, LIST_COLUMNS, mapListRow, batchSize);
 }

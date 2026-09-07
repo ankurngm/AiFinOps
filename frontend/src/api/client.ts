@@ -1,5 +1,11 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { LogDetail, LogsFilters, LogsFiltersResponse, LogsListResponse } from './types';
+import type {
+  LogDetail,
+  LogsFilters,
+  LogsFiltersResponse,
+  LogsListResponse,
+  LogsPivotDataResponse,
+} from './types';
 
 function toQueryParams(
   filters: LogsFilters,
@@ -44,6 +50,15 @@ export function useLogsFilters() {
     queryKey: ['logs-filters'],
     queryFn: () => fetchJson<LogsFiltersResponse>('/api/logs/filters'),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useLogsPivotData(filters: LogsFilters, enabled: boolean) {
+  const params = toQueryParams(filters);
+  return useQuery({
+    queryKey: ['logs-pivot-data', params.toString()],
+    queryFn: () => fetchJson<LogsPivotDataResponse>(`/api/logs/pivot-data?${params.toString()}`),
+    enabled,
   });
 }
 

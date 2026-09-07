@@ -183,6 +183,90 @@ body {
   line-height: 1.5;
 }
 
+/* Report Builder (react-pivottable) */
+.pivot-caption {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-soft);
+  font-style: italic;
+  margin-bottom: 12px;
+}
+
+.pivot-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.pivot-wrap .pvtUi {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.pivot-wrap table.pvtTable {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  border-collapse: collapse;
+}
+
+.pivot-wrap table.pvtTable th,
+.pivot-wrap table.pvtTable td {
+  border: 1px solid var(--line-soft);
+  padding: 6px 9px;
+}
+
+.pivot-wrap table.pvtTable thead tr th {
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.pivot-wrap .pvtRowLabel,
+.pivot-wrap .pvtColLabel {
+  background: var(--paper);
+}
+
+.pivot-wrap .pvtTotal,
+.pivot-wrap .pvtGrandTotal {
+  font-weight: 700;
+  background: var(--ledger-soft) !important;
+  color: var(--ledger);
+}
+
+.pivot-wrap .pvtAxisContainer,
+.pivot-wrap .pvtVals,
+.pivot-wrap .pvtRenderers {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.pivot-wrap .pvtAxisContainer li span.pvtAttr {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  border-radius: 2px;
+}
+
+.pivot-wrap .pvtAxisContainer li span.pvtAttr:hover {
+  border-color: var(--ledger);
+}
+
+.pivot-wrap select,
+.pivot-wrap .pvtDropdownValue {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.pivot-wrap .pvtUiCell,
+.pivot-wrap .pvtAxisContainer {
+  vertical-align: top;
+}
+
 .error-banner {
   border: 1px solid var(--rust);
   background: var(--rust-soft);

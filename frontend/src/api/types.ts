@@ -43,6 +43,10 @@ export interface LogsListResponse {
   };
 }
 
+export interface LogsPivotDataResponse {
+  rows: LogListRow[];
+}
+
 export interface LogsFiltersResponse {
   providers: string[];
   statuses: RequestStatus[];

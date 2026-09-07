@@ -7,6 +7,7 @@ import { FilterPills } from './components/FilterPills';
 import { FiltersPopoverButton } from './components/FiltersPopoverButton';
 import { LogsTable } from './components/LogsTable';
 import { Pagination } from './components/Pagination';
+import { ReportBuilderView } from './components/ReportBuilderView';
 import { RowDetailDrawer } from './components/RowDetailDrawer';
 import { useAppUrlState, type TabKey } from './hooks/useAppUrlState';
 
@@ -141,12 +142,7 @@ export default function App() {
           </>
         )}
 
-        {tab === 'pivot' && (
-          <ComingSoonPanel
-            title="Coming soon"
-            description="Report Builder will let you pivot logged requests across cost, tokens, and attribution dimensions — filtered by the same criteria as Logs."
-          />
-        )}
+        <ReportBuilderView filters={filters} active={tab === 'pivot'} />
       </div>
 
       <RowDetailDrawer logId={selectedLogId} onClose={() => setSelectedLogId(null)} />
