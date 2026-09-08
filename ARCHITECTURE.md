@@ -77,8 +77,9 @@ src/
   routes/
     chatCompletions.ts        POST /v1/chat/completions handler
     health.ts                  GET /health handler
-    logs.ts                     GET /api/logs, /api/logs/filters, /api/logs/:id
+    logs.ts                     GET /api/logs, /api/logs/filters, /api/logs/:id, /api/logs/pivot-data
     logsExport.ts                 GET /api/logs/export.csv, /api/logs/export.jsonl
+    overview.ts                    GET /api/overview/summary, /api/overview/details
   transformers/
     types.ts                  ProviderTransformer interface
     openAICompatibleTransformer.ts  shared base: buildRequest for any OpenAI-compatible provider
@@ -92,24 +93,36 @@ src/
     logRequest.ts               insert one row per request/response
     logsFilterBuilder.ts          builds a parameterized WHERE clause from validated log filters
     logsRepository.ts              list/count/get-by-id/distinct-values/streamed-export queries
+    overviewRepository.ts           Spend Overview's Summary/Details aggregation queries
     csvUtils.ts                     RFC 4180 CSV escaping + truncated-JSON preview for exports
   logging/
     auditLog.ts                 optional file-based audit log (Winston, size-rotated)
   schemas/
     chatCompletionRequest.ts    Zod schema for the inbound OpenAI-shaped body
     attribution.ts               Zod schema for the optional attribution headers
-    logsQuery.ts                   Zod schema for the logs list/filter/export query params
+    logsQuery.ts                   Zod schema for the logs list/filter/export/pivot/overview query params
 config/
   providers.json                which providers are provisioned
   providerModelMap.json         which model IDs are provisioned per provider
   modelPricing.json             dated per-token pricing, for providers that don't self-report cost
 scripts/
   setup-db.ts                   creates the DB (if missing) + tables — `npm run setup-db`
-frontend/                       logs dashboard — React + Vite + Tailwind, its own npm workspace
+frontend/                       dashboard — React + Vite, its own npm workspace
   src/
-    App.tsx, main.tsx             app shell, filter/pagination/selection state
+    App.tsx, main.tsx             tab shell, URL-driven filter/tab state (see below)
+    hooks/
+      useUrlSearchParams.ts         generic URL-query-string store (History API + useSyncExternalStore)
+      useAppUrlState.ts               typed tab + LogsFilters read/write on top of it
     api/                            fetch wrappers + TanStack Query hooks, response DTO types
-    components/                      FiltersBar, LogsTable, Pagination, RowDetailDrawer, ExportButtons
+    lib/
+      format.ts                       shared $ and delta-caption formatting
+    components/
+      FilterToolbar.tsx                shared filter pills + popover, used by all three tabs
+      LogsTable.tsx, Pagination.tsx, RowDetailDrawer.tsx, DownloadMenu.tsx   Logs tab
+      ReportBuilderView.tsx             Report Builder tab (react-pivottable)
+      overview/                          Spend Overview tab
+        SummaryPanel.tsx, DetailsPanel.tsx, DailySpendChart.tsx, KpiTile.tsx,
+        NamedAmountList.tsx, BarList.tsx, ChargebackTable.tsx
 ```
 
 ## Environment variables
@@ -517,7 +530,7 @@ asynchronously under the hood.
 ```json
 {
   "status": "ok",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "uptimeSeconds": 3421,
   "database": "reachable",
   "providers": { "openrouter": "ready" }
@@ -540,13 +553,14 @@ the exact commands.
 
 **Endpoints** (all under `/api/logs*`, no auth — same posture as the rest of the gateway today):
 
-| Endpoint                     | Purpose                                                                                                                  |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `GET /api/logs`              | Paginated list (`page`, `pageSize`, default 50/max 200), rows exclude `request_body`/`response_body`                     |
-| `GET /api/logs/filters`      | Dropdown options: `providers` (from `config/providers.json`), `statuses` (hardcoded), `resolvedModelIds` (DB `DISTINCT`) |
-| `GET /api/logs/:id`          | One row, full `requestBody`/`responseBody`. `404` if not found                                                           |
-| `GET /api/logs/export.csv`   | Streamed CSV — metadata columns plus a ~200-char JSON preview of each body                                               |
-| `GET /api/logs/export.jsonl` | Streamed NDJSON — one full row (untruncated bodies) per line                                                             |
+| Endpoint                     | Purpose                                                                                                                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/logs`              | Paginated list (`page`, `pageSize`, default 50/max 200), rows exclude `request_body`/`response_body`                                                                   |
+| `GET /api/logs/filters`      | Dropdown options: `providers` + `providerDisplayNames` (from `config/providers.json`), `statuses` (hardcoded), `resolvedModelIds` (DB `DISTINCT`)                      |
+| `GET /api/logs/:id`          | One row, full `requestBody`/`responseBody`. `404` if not found                                                                                                         |
+| `GET /api/logs/export.csv`   | Streamed CSV — metadata columns plus a ~200-char JSON preview of each body                                                                                             |
+| `GET /api/logs/export.jsonl` | Streamed NDJSON — one full row (untruncated bodies) per line                                                                                                           |
+| `GET /api/logs/pivot-data`   | Every row matching the filters, list-column shape (no request/response bodies) — feeds the Report Builder tab, see [Report Builder](#report-builder-pivot-table) below |
 
 **Filters — two kinds, deliberately.** `provider`, `resolvedModelId`, and `status` are exact-match
 dropdowns backed by bounded, cheap-to-query sets. The seven free-form attribution fields
@@ -571,13 +585,123 @@ it uses keyset pagination (`id > lastId ORDER BY id ASC`, batched) instead, sinc
 grows linearly with how far into the export you are while keyset stays flat per batch. Both
 export routes stream their response via `reply.send(Readable.from(asyncGenerator))` — batches are
 read from Postgres and written to the client with real backpressure, never buffered in full in
-memory. See `iterateLogsForExport()` in `src/db/logsRepository.ts`.
+memory.
+
+The keyset-streaming loop itself is factored into one shared generator, `iterateLogRows()` in
+`src/db/logsRepository.ts`, parameterized by which columns to select and how to map a row. Two
+thin wrappers sit on top of it: `iterateLogsForExport()` (`SELECT *`, full row incl.
+request/response bodies — CSV/JSONL export) and `iterateLogsSummary()` (list columns only, no
+bodies — `/api/logs/pivot-data`, see [Report Builder](#report-builder-pivot-table)). Both walk
+the same way; they only differ in how much of each row they pull off the wire.
 
 **Two `pg` type-mapping details that matter here:** `id` (`BIGSERIAL`) comes back from `pg` as a
 string, not a number, to avoid precision loss past `Number.MAX_SAFE_INTEGER` — every DTO types
 `id: string`, and the `:id` route param is validated as a digit string rather than coerced to a
 number. `request_body`/`response_body` (`JSONB`) round-trip as parsed JS objects automatically, no
 extra `JSON.parse` needed on read.
+
+## Dashboard shell: tabs and URL-driven state
+
+Three top-level tabs — **Spend Overview** (default), **Logs**, **Report Builder** — with Spend
+Overview split into two sub-tabs, **Summary** and **Details**. Implementation: `frontend/src/App.tsx`.
+
+**The active tab and every filter live in the URL's query string, not React state.**
+`frontend/src/hooks/useUrlSearchParams.ts` is a generic reactive store over
+`window.location.search`, built on `useSyncExternalStore` plus `history.pushState` — no
+`react-router` or similar, since this is a flat query-param scheme with no nested routes, and
+pulling in a router for that would be pure overhead. `pushState` doesn't fire `popstate` on its
+own, so a same-tab update also dispatches a custom `aifinops:urlchange` event the store subscribes
+to; browser back/forward is handled for free by the native `popstate` event. `useAppUrlState.ts`
+layers the typed `tab` (`overview` | `logs` | `pivot`) and `LogsFilters` (the same shape
+`/api/logs`, `/api/logs/pivot-data`, and `/api/overview/details` all accept) on top of it.
+
+**What's URL-synced and what isn't.** `tab` and every `LogsFilters` field are — so a copied link
+reproduces the exact view, and each change is its own history entry. Deliberately **not**
+URL-synced: the Logs table's page number, the selected row (detail drawer), which Spend Overview
+sub-tab is active, and the pivot table's own row/column/aggregator configuration — all local
+component state, out of scope for "share this exact view."
+
+**Toolbar visibility.** The shared filter toolbar (`frontend/src/components/FilterToolbar.tsx`,
+factored out of what was originally Logs-only markup) renders on Details, Logs, and Report
+Builder, and is hidden on Summary — Summary is a fixed 30-day window, so the filter bar has
+nothing to act on there.
+
+## Spend Overview
+
+**Summary** (`GET /api/overview/summary`, no query params) is a fixed 30-day snapshot, always
+comparing the trailing 30 days against the 30 days before that — deliberately unaffected by
+whatever filter is set on Details, so it stays a stable day-to-day pulse-check. **Details**
+(`GET /api/overview/details`) takes the same `LogsFilters` as `/api/logs`. Both are backed by
+`src/db/overviewRepository.ts` — every figure is computed with SQL `GROUP BY`/`FILTER`
+aggregation, not fetched-then-reduced in application code, so it scales with row count rather
+than with how much gets pulled over the wire.
+
+**"Wasted spend"** is `SUM(cost) FILTER (WHERE status = 'error')` — cost that was actually billed
+on a call that ultimately failed. A request that fails _before_ reaching the provider (missing API
+key, unprovisioned model) has `cost = NULL` and doesn't count as wasted, since nothing was ever
+billed for it; a request the provider processed and billed before returning an error does.
+
+**Prior-period deltas.** Summary's are unconditional (see above). Details' `spendDeltaPct` is only
+computed when the caller has set both `startDate` and `endDate` — it then compares against an
+equal-length window immediately preceding `startDate`. There's no well-defined "prior period" for
+an open-ended or unbounded query, so no delta is computed in that case (the frontend shows "set a
+date range to compare" rather than a fabricated number).
+
+**Top-N behavior is deliberately inconsistent across panels** — each matches what the panel is
+for:
+
+| Panel                                                                  | Behavior                                                                                                                                        |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `topModelsBySpend` (Summary), `breakdownByModel` (Details)             | Top 5 + one folded "Other (N models)" row — always sums to 100%                                                                                 |
+| `providerMix` ("Top 5 provider mix", Summary), `topSpenders` (Details) | Plain top-5 slice, **no fold** — percentages are against the _true_ total, so 6+ entries means the visible rows intentionally sum to under 100% |
+| `breakdownByProvider`, `chargebackByApplication` (Details)             | Every row, unbounded                                                                                                                            |
+
+`chargebackByApplication`'s `wastedPct` is each application's **own** waste rate (`wasted ÷ that
+application's own spend`), not its share of overall spend — `null` (rendered as `—`) when the
+application has $0 spend to divide by, rather than a misleading `0%`.
+
+**A documented gotcha:** every "rank by spend" query orders by `COALESCE(SUM(cost), 0) DESC`,
+never bare `SUM(cost) DESC`. Postgres sorts `NULL` **first** under `DESC` by default — a group
+whose cost sums to `NULL` (every request in it failed before billing) would otherwise jump to the
+top of the ranking ahead of real spenders, despite displaying as `$0`. This bit the "Top models by
+spend" panel once already; don't reintroduce a bare `SUM(cost) DESC` anywhere in this file.
+
+**Provider colors in the "Daily spend by provider" chart are assigned dynamically**, not
+hardcoded — `frontend/src/components/overview/DailySpendChart.tsx` reads `providers` and
+`providerDisplayNames` from `/api/logs/filters` (sourced straight from `config/providers.json`'s
+`displayName`, not a hand-written label map), so a newly-provisioned provider shows up with its
+real name automatically. The 4 providers shipped today keep fixed, stable colors (looked up by
+id); a new provider takes the next slot from the same pre-validated 8-color categorical palette;
+past 8 total, the remainder fold into one "Other providers" series rather than reusing a color.
+
+## Report Builder (pivot table)
+
+Ad hoc pivoting over the same audit trail, via `react-pivottable`
+(`frontend/src/components/ReportBuilderView.tsx`), restricted to its `Table` and `Table Heatmap`
+renderers — no Plotly/chart renderers, so the dependency footprint stays to the one library, no
+separate charting package. Data source: `GET /api/logs/pivot-data`, refetched whenever the tab is
+active and whenever the shared filters change — filtering happens server-side, the same way it
+does for Logs, not as a client-side re-filter of an already-fetched page.
+
+Two bugs worth documenting here so neither gets silently reintroduced:
+
+1. **CJS/ESM default-export interop.** `react-pivottable/PivotTableUI`'s CJS build exports
+   `{ DraggableAttribute, Dropdown, default: PivotTableUI }`. Because it has more than one export,
+   Vite's dev dependency pre-bundler doesn't flatten it the way it does a single-export module
+   like `TableRenderers` — a plain default import binds a couple of layers away from the actual
+   class, and the exact depth isn't guaranteed to match between the dev (esbuild) and prod
+   (Rollup) bundlers. `unwrapDefault()` peels `.default` until it finds something callable, which
+   works under both.
+2. **Stale `data` after the first UI interaction.** `PivotTableUI`'s `onChange` fires with its
+   _entire current props object_ patched with whatever changed (`onChange(update(this.props,
+command))` in the library's own source) — including a snapshot of `data`. Storing that whole
+   object back into React state and spreading it onto the next render re-injects that stale
+   `data`, silently overriding every filter-driven refetch after the first drag or aggregator
+   change (data would look frozen on whatever was current the first time the user touched the
+   UI). The fix: `onChange` whitelists only the actual pivot-configuration fields (`rows`, `cols`,
+   `vals`, `aggregatorName`, `rendererName`, `valueFilter`, `sorters`, `rowOrder`, `colOrder`)
+   before storing them — `data` and `renderers` are always passed fresh from the current query
+   result on every render, never from stored state.
 
 ## Extending AiFinOps — adding a new provider
 
