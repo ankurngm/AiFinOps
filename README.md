@@ -1,6 +1,6 @@
 # 💸 AiFinOps
 
-![AiFinOps Dashboard — Request Log](assets/screenshots/dashboard_v1_0_0.png)
+![AiFinOps Dashboard Demo](assets/screenshots/v1_1_0_demo.gif)
 
 AiFinOps is a self-hosted, OpenAI-compatible **LLM gateway built for cost governance**. Every
 call your team makes to an LLM — provider, model, tokens, cost — passes through one audited
