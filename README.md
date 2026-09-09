@@ -100,6 +100,16 @@ shared with a teammate. For frontend-only hot reload while iterating on the UI, 
 dev:frontend` in a second terminal instead — its dev server proxies API calls to the backend on
 `:8787`.
 
+## 🗺️ Future Roadmap
+
+Directions we're exploring next:
+
+- **New provider onboarding** - broaden coverage beyond OpenAI, Anthropic, Ollama, etc.
+- **Financial projections** - forecast where spend is headed, not just where it's been.
+- **Budget, policy & quota enforcement** - cap spend by tenant/application/user etc. before it happens.
+- **Task-level cost analysis for agentic workflows** - break spend down by task within a
+  multi-call agent chain, using existing attribution tags.
+
 ## Changelog
 
 All notable changes to this project are documented here. Dates are in `YYYY-MM-DD` format.
