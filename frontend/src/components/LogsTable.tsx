@@ -59,7 +59,7 @@ export function LogsTable({ rows, isLoading, onSelectRow }: LogsTableProps) {
           )}
           {!isLoading &&
             rows.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} className="clickable-row" onClick={() => onSelectRow(row.id)}>
                 {COLUMNS.map((column) => (
                   <td key={column.header}>{column.render(row)}</td>
                 ))}

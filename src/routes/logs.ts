@@ -7,9 +7,15 @@
 
 import type { FastifyInstance } from 'fastify';
 import { pool } from '../db/pool.js';
-import { getDistinctResolvedModelIds, getLogById, listLogs } from '../db/logsRepository.js';
+import {
+  getDistinctResolvedModelIds,
+  getLogById,
+  iterateLogsSummary,
+  listLogs,
+  type LogListRow,
+} from '../db/logsRepository.js';
 import { providers } from '../config/providers.js';
-import { logIdParamSchema, logsListQuerySchema } from '../schemas/logsQuery.js';
+import { logIdParamSchema, logsFiltersSchema, logsListQuerySchema } from '../schemas/logsQuery.js';
 
 export async function logsRoute(app: FastifyInstance): Promise<void> {
   app.get('/api/logs', async (request, reply) => {
@@ -40,11 +46,30 @@ export async function logsRoute(app: FastifyInstance): Promise<void> {
 
   app.get('/api/logs/filters', async (_request, reply) => {
     const resolvedModelIds = await getDistinctResolvedModelIds(pool);
+    const providerDisplayNames = Object.fromEntries(
+      Object.entries(providers).map(([id, config]) => [id, config.displayName]),
+    );
     return reply.send({
       providers: Object.keys(providers),
+      providerDisplayNames,
       statuses: ['success', 'error'],
       resolvedModelIds,
     });
+  });
+
+  // Every row matching the given filters, list-column shape (no request/response bodies) —
+  // powers the Report Builder pivot table, which needs the full filtered set rather than one page.
+  app.get('/api/logs/pivot-data', async (request, reply) => {
+    const parseResult = logsFiltersSchema.safeParse(request.query);
+    if (!parseResult.success) {
+      return reply.status(400).send({ error: 'invalid query parameters' });
+    }
+
+    const rows: LogListRow[] = [];
+    for await (const row of iterateLogsSummary(pool, parseResult.data)) {
+      rows.push(row);
+    }
+    return reply.send({ rows });
   });
 
   app.get('/api/logs/:id', async (request, reply) => {

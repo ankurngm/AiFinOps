@@ -1,5 +1,13 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { LogDetail, LogsFilters, LogsFiltersResponse, LogsListResponse } from './types';
+import type {
+  LogDetail,
+  LogsFilters,
+  LogsFiltersResponse,
+  LogsListResponse,
+  LogsPivotDataResponse,
+  OverviewDetailsResponse,
+  OverviewSummaryResponse,
+} from './types';
 
 function toQueryParams(
   filters: LogsFilters,
@@ -44,6 +52,32 @@ export function useLogsFilters() {
     queryKey: ['logs-filters'],
     queryFn: () => fetchJson<LogsFiltersResponse>('/api/logs/filters'),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useLogsPivotData(filters: LogsFilters, enabled: boolean) {
+  const params = toQueryParams(filters);
+  return useQuery({
+    queryKey: ['logs-pivot-data', params.toString()],
+    queryFn: () => fetchJson<LogsPivotDataResponse>(`/api/logs/pivot-data?${params.toString()}`),
+    enabled,
+  });
+}
+
+export function useOverviewSummary() {
+  return useQuery({
+    queryKey: ['overview-summary'],
+    queryFn: () => fetchJson<OverviewSummaryResponse>('/api/overview/summary'),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useOverviewDetails(filters: LogsFilters, enabled: boolean) {
+  const params = toQueryParams(filters);
+  return useQuery({
+    queryKey: ['overview-details', params.toString()],
+    queryFn: () => fetchJson<OverviewDetailsResponse>(`/api/overview/details?${params.toString()}`),
+    enabled,
   });
 }
 

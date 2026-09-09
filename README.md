@@ -1,6 +1,6 @@
 # 💸 AiFinOps
 
-![AiFinOps Dashboard — Request Log](assets/screenshots/dashboard_v1_0_0.png)
+![AiFinOps Dashboard Demo](assets/screenshots/v1_1_0_demo.gif)
 
 AiFinOps is a self-hosted, OpenAI-compatible **LLM gateway built for cost governance**. Every
 call your team makes to an LLM — provider, model, tokens, cost — passes through one audited
@@ -17,6 +17,7 @@ Sound familiar?
 
 - "How much are we spending on LLMs this month — and is it growing?"
 - "Which team or app is driving that spend?"
+- "How much of that spend is going to calls that failed anyway?"
 - "Could we be paying less for the same task on a different model?"
 - "Is anyone calling a model we never approved?"
 
@@ -31,18 +32,19 @@ conversation. AiFinOps exists so you can answer them before your VP or CFO asks 
 - **Every call is logged, in full, before the response is returned.** Full request/response
   bodies, tokens, and cost — a complete record of what was spent and on what.
 
-Approving a new model is a one-line, explicit decision — add it here and it's callable; leave it
-out and it's a `400`, no matter what the provider itself would accept:
+**Available today:**
 
-```json
-"openrouter": ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"]
-```
+- Full request-level cost logging across providers like OpenRouter, OpenAI, Anthropic, Ollama, etc.
+- Optional attribution tags (tenant, application, module, user, transaction, region, environment)
+  captured on every call
+- A Spend Overview dashboard with rolling trends, top spenders, and a per-application chargeback
+  rollup
+- A self-service Report Builder for ad hoc analysis
+- A logs screen for searching and inspecting individual calls without SQL
+- Every view is filterable, shareable, and bookmarkable — filters and the active tab live in the
+  URL
 
-**v1.0.0 ships today:** full request-level cost logging across OpenRouter, OpenAI, Anthropic, and
-Ollama, with optional attribution tags (tenant, application, module, user, transaction, region,
-environment) captured on every call, plus a logs dashboard for searching and inspecting that data
-without SQL. **Next up:** rolling it up into spend/volume trends over time — see
-[Roadmap](#roadmap) below.
+See [Changelog](#changelog) for release history.
 
 → For exactly how requests are validated, routed, and logged, see
 [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -50,7 +52,7 @@ without SQL. **Next up:** rolling it up into spend/volume trends over time — s
 ## 🚀 Get Started
 
 Prerequisites: Node.js 20+, a running Postgres server, and an API key for at least one provider
-you plan to use (OpenRouter, OpenAI, Anthropic — Ollama needs no key at all).
+you plan to use (OpenAI, Anthropic, Ollama etc.)
 
 ```bash
 npm install
@@ -61,9 +63,9 @@ npm run setup-db
 npm run dev
 ```
 
-> ⚠️ **v1 has no inbound authentication.** Anyone who can reach this port can make LLM calls
-> billed to your account. Don't expose it beyond a trusted network until authentication ships —
-> see [Roadmap](#roadmap).
+> ⚠️ **v1 has no inbound authentication** (same default as most self-hosted LLM gateways, e.g.
+> LiteLLM without a master key). Anyone who can reach this port can make LLM calls billed to
+> your account. Don't expose it beyond a trusted network.
 
 Then call it like any OpenAI Chat Completions endpoint, using a gateway-flavored `model` string
 (`"<provider>/<providerModelId>"`):
@@ -87,32 +89,48 @@ npm run build:frontend
 npm run dev   # or npm run build && npm run start for a production run
 ```
 
-Then open `http://localhost:8787` — filter by date, provider, model, status, tenant, application,
-region, or user (free-text fields match anywhere in the value), inspect any call's full
-request/response, and export the filtered results as CSV or a full JSONL dump. For frontend-only
-hot reload while iterating on the UI, run `npm run dev:frontend` in a second terminal instead —
-its dev server proxies API calls to the backend on `:8787`.
+Then open `http://localhost:8787` — **Spend Overview** for a 30-day pulse-check plus a filterable
+drill-down into top spenders, provider/model breakdowns, and a per-application chargeback rollup;
+**Logs** to filter by date, provider, model, status, tenant, application, region, or user
+(free-text fields match anywhere in the value), inspect any call's full request/response, and
+export the filtered results as CSV or a full JSONL dump; and **Report Builder** to pivot the same
+data yourself — drag any field into rows or columns to answer a new question without waiting on a
+new dashboard. Every filter and tab lives in the URL, so a specific view can be bookmarked or
+shared with a teammate. For frontend-only hot reload while iterating on the UI, run `npm run
+dev:frontend` in a second terminal instead — its dev server proxies API calls to the backend on
+`:8787`.
 
-## 🗺️ Roadmap
+## 🗺️ Future Roadmap
 
-Near-term priorities:
+Directions we're exploring next:
 
-- **Spend limits at the model and application level** — configurable soft and hard limits, so
-  spend can be capped before it happens.
-- **Rolling spend/volume trends on the dashboard** — the logs screen (see
-  [Get Started](#-get-started)) covers request-level inspection; charting cost and volume over
-  time is next.
-
-And further out: streaming responses, inbound gateway authentication, per-tenant/per-team
-provisioning scoping, normalized cross-provider error shapes, retry/fallback logic, and an
-`extra_body`-style escape hatch for provider-native-only parameters.
-
-→ See [ARCHITECTURE.md](ARCHITECTURE.md) for how the `ProviderTransformer` interface makes most
-of this additive, not a rewrite.
+- **New provider onboarding** - broaden coverage beyond OpenAI, Anthropic, Ollama, etc.
+- **Financial projections** - forecast where spend is headed, not just where it's been.
+- **Budget, policy & quota enforcement** - cap spend by tenant/application/user etc. before it happens.
+- **Task-level cost analysis for agentic workflows** - break spend down by task within a
+  multi-call agent chain, using existing attribution tags.
 
 ## Changelog
 
 All notable changes to this project are documented here. Dates are in `YYYY-MM-DD` format.
+
+### 1.1.0 — 2026-09-07
+
+- **Spend Overview dashboard** — Open one page and know right away if your AI costs are climbing,
+  without pulling logs or building a report. Total spend, request volume, and average cost per
+  call each show a percent change vs. the prior 30 days (once you have that much history). Drill
+  down further to see who's actually driving the bill — top spenders by tenant, application, or
+  user — and how spend splits across providers and models.
+- **Wasted-spend visibility** — See exactly how much money went to API calls that failed anyway —
+  you paid for nothing. Shown as its own number, plus a per-application breakdown, so you can tell
+  which application is quietly burning money on errors instead of guessing.
+- **Report Builder** — Build your own cost report by dragging fields — tenant, application,
+  provider, model, cost, tokens, and more — into rows and columns yourself. No more asking an
+  engineer to build a dashboard for a one-off question.
+- **Shareable, bookmarkable views** — Whatever tab you're on and whatever filters you've applied
+  are saved in the page's URL. Copy the link and send it to a coworker — they land on the exact
+  same view, no need to explain which filters to click. Back/forward in the browser also works as
+  expected.
 
 ### 1.0.0 — 2026-08-30
 

@@ -13,12 +13,14 @@
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-pivottable": "^0.11.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "@types/react-pivottable": "^0.11.6",
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^10.9.1",
     "eslint-plugin-react-hooks": "^7.1.1",
