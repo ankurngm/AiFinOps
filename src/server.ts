@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyMiddie from '@fastify/middie';
 import { env } from './config/env.js';
 import { getProviderReadiness } from './config/providers.js';
 import { checkPricingCoverage } from './config/modelPricing.js';
@@ -87,15 +88,37 @@ async function main(): Promise<void> {
   await app.register(logsExportRoute);
   await app.register(overviewRoute);
 
-  const frontendDist = join(process.cwd(), 'frontend/dist');
-  if (existsSync(join(frontendDist, 'index.html'))) {
-    await app.register(fastifyStatic, { root: frontendDist });
-    console.log('✅ Serving the logs dashboard from frontend/dist');
+  if (env.NODE_ENV === 'production') {
+    const frontendDist = join(process.cwd(), 'frontend/dist');
+    if (existsSync(join(frontendDist, 'index.html'))) {
+      await app.register(fastifyStatic, { root: frontendDist });
+      console.log('✅ Serving the logs dashboard from frontend/dist');
+    } else {
+      console.log(
+        'ℹ️  frontend/dist not found — run `npm run build:frontend` to serve the dashboard from ' +
+          'this process.',
+      );
+    }
   } else {
-    console.log(
-      'ℹ️  frontend/dist not found — run `npm run build:frontend` to serve the dashboard from ' +
-        'this process, or `npm run dev:frontend` for local development.',
-    );
+    // Vite runs in middleware mode inside this same process, so the API and the
+    // HMR-enabled dashboard are both served from env.PORT — no second dev server.
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      root: join(process.cwd(), 'frontend'),
+      server: { middlewareMode: true, hmr: { server: app.server } },
+      appType: 'spa',
+    });
+    await app.register(fastifyMiddie);
+    // Vite's SPA fallback runs in the onRequest phase, ahead of Fastify's own
+    // routing — without this guard it would swallow /api, /v1 and /health
+    // requests and answer them with index.html before our routes ever saw them.
+    app.use((req, res, next) => {
+      if (req.url?.startsWith('/api') || req.url?.startsWith('/v1') || req.url === '/health') {
+        return next();
+      }
+      vite.middlewares(req, res, next);
+    });
+    console.log('✅ Serving the logs dashboard via Vite (HMR) on this same port');
   }
 
   try {
