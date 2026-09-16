@@ -848,6 +848,24 @@ tbody tr:hover {
   color: var(--ink-soft);
 }
 
+/* Provider Health charts — an axis with more buckets than fit legibly (e.g. 90 daily bars)
+ * shows only a subset of labels, each positioned by percentage instead of an equal flex share
+ * per bucket, so a shown label keeps its natural width instead of being squeezed unreadable. */
+.chart-axis-labels {
+  position: relative;
+  height: 14px;
+  margin-top: 6px;
+}
+
+.chart-axis-labels span {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
 .legend {
   display: flex;
   gap: 16px;
@@ -867,6 +885,16 @@ tbody tr:hover {
 .legend .sw {
   width: 9px;
   height: 9px;
+}
+
+.annot {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-style: italic;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
 }
 
 /* Spend Overview — two-column panels, model/provider rows */
@@ -1011,4 +1039,97 @@ tbody tr:hover {
 
 .rollup-table td.wasted {
   color: var(--rust);
+}
+
+/* Provider Health — scorecards and mini trend lines */
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.provider-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 16px 18px;
+}
+
+.provider-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1.5px solid var(--ink);
+}
+
+.provider-card-head .pname {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
+  text-transform: capitalize;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.provider-card-head .pname .sw {
+  width: 9px;
+  height: 9px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.mini-line-chart {
+  height: 120px;
+  position: relative;
+  border-bottom: 1px solid var(--ink);
+  margin-top: 8px;
+}
+
+/* Provider Health — hover readout shared by the stacked volume chart and the per-provider
+ * line charts. Anchored via `left` as a percentage (set inline per-chart) rather than pixels,
+ * clamped to left/center/right in ChartTooltip so it never spills past the chart's own edges. */
+.chart-tooltip {
+  position: absolute;
+  top: 6px;
+  z-index: 20;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 8px 20px rgba(14, 21, 12, 0.25);
+}
+
+.chart-tooltip-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(246, 245, 241, 0.35);
+}
+
+.chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.chart-tooltip-row .sw {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+}
+
+.chart-tooltip-label {
+  text-transform: capitalize;
+}
+
+.chart-tooltip-value {
+  margin-left: 14px;
+  font-weight: 600;
 }

@@ -110,3 +110,46 @@ export interface OverviewDetailsResponse {
     wastedPct: number | null;
   }>;
 }
+
+export interface ProviderHealthStat {
+  provider: string;
+  calls: number;
+  successRate: number;
+  errorRate: number;
+  avgLatency: number;
+  p95Latency: number;
+  wastedSpend: number;
+  wastedTokens: number;
+  totalSpend: number;
+  costPerCall: number;
+  avgTokensPerCall: number;
+  shareOfSpend: number;
+}
+
+export interface ProviderHealthSnapshotResponse {
+  windowDays: number;
+  stats: ProviderHealthStat[];
+}
+
+export type ProviderHealthTrendGranularity = 'day' | 'week' | 'month';
+
+export interface ProviderHealthBucketStats {
+  count: number;
+  errors: number;
+  wastedSpend: number;
+  latencySum: number;
+}
+
+export interface ProviderHealthTrendBucket {
+  key: string;
+  label: string;
+  isCurrent: boolean;
+  providers: Record<string, ProviderHealthBucketStats>;
+}
+
+export interface ProviderHealthTrendsResponse {
+  providers: string[];
+  windowDays: number;
+  granularity: ProviderHealthTrendGranularity;
+  buckets: ProviderHealthTrendBucket[];
+}

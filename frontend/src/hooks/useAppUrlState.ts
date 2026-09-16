@@ -1,10 +1,10 @@
 import { useUrlSearchParams } from './useUrlSearchParams';
 import type { LogsFilters } from '../api/types';
 
-export type TabKey = 'overview' | 'logs' | 'pivot';
+export type TabKey = 'overview' | 'provider-health' | 'logs' | 'pivot';
 
 const DEFAULT_TAB: TabKey = 'overview';
-const TAB_KEYS: TabKey[] = ['overview', 'logs', 'pivot'];
+const TAB_KEYS: TabKey[] = ['overview', 'provider-health', 'logs', 'pivot'];
 
 const FILTER_KEYS: Array<keyof LogsFilters> = [
   'startDate',

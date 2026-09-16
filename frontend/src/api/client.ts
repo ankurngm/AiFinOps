@@ -7,6 +7,8 @@ import type {
   LogsPivotDataResponse,
   OverviewDetailsResponse,
   OverviewSummaryResponse,
+  ProviderHealthSnapshotResponse,
+  ProviderHealthTrendsResponse,
 } from './types';
 
 function toQueryParams(
@@ -78,6 +80,28 @@ export function useOverviewDetails(filters: LogsFilters, enabled: boolean) {
     queryKey: ['overview-details', params.toString()],
     queryFn: () => fetchJson<OverviewDetailsResponse>(`/api/overview/details?${params.toString()}`),
     enabled,
+  });
+}
+
+export function useProviderHealthSnapshot(windowDays: number) {
+  return useQuery({
+    queryKey: ['provider-health-snapshot', windowDays],
+    queryFn: () =>
+      fetchJson<ProviderHealthSnapshotResponse>(
+        `/api/provider-health/snapshot?windowDays=${windowDays}`,
+      ),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useProviderHealthTrends(windowDays: number) {
+  return useQuery({
+    queryKey: ['provider-health-trends', windowDays],
+    queryFn: () =>
+      fetchJson<ProviderHealthTrendsResponse>(
+        `/api/provider-health/trends?windowDays=${windowDays}`,
+      ),
+    staleTime: 60 * 1000,
   });
 }
 

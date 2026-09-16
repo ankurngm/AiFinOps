@@ -21,6 +21,7 @@ import { healthRoute } from './routes/health.js';
 import { logsRoute } from './routes/logs.js';
 import { logsExportRoute } from './routes/logsExport.js';
 import { overviewRoute } from './routes/overview.js';
+import { providerHealthRoute } from './routes/providerHealth.js';
 
 function logProviderReadiness(): void {
   const { ready, notReady } = getProviderReadiness();
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
   await app.register(logsRoute);
   await app.register(logsExportRoute);
   await app.register(overviewRoute);
+  await app.register(providerHealthRoute);
 
   let vite: ViteDevServer | undefined;
 

@@ -6,6 +6,7 @@ import { LogsTable } from './components/LogsTable';
 import { DetailsPanel } from './components/overview/DetailsPanel';
 import { SummaryPanel } from './components/overview/SummaryPanel';
 import { Pagination } from './components/Pagination';
+import { ProviderHealthPanel } from './components/providerHealth/ProviderHealthPanel';
 import { ReportBuilderView } from './components/ReportBuilderView';
 import { RowDetailDrawer } from './components/RowDetailDrawer';
 import { useAppUrlState, type TabKey } from './hooks/useAppUrlState';
@@ -28,6 +29,17 @@ const TABS: Array<{
       'Summary is the standard 30-day pulse-check everyone glances at first. Details is where ' +
       'you drill into who is responsible, what was wasted, and how it breaks down — scoped to ' +
       'the filter below.',
+  },
+  {
+    key: 'provider-health',
+    label: 'Provider Health',
+    eyebrow: 'Operational · Provider-Level, No Filters',
+    heading: 'Provider Health',
+    description:
+      'How each upstream provider is actually performing — volume, reliability, latency, and ' +
+      'waste — rolled up at the provider level regardless of which model, tenant, or ' +
+      'application sent the request. This tab always reads the full dataset; the filter bar ' +
+      "doesn't apply here.",
   },
   {
     key: 'logs',
@@ -66,8 +78,10 @@ export default function App() {
 
   const activeTab = TABS.find((t) => t.key === tab) ?? TABS[0]!;
   // Filters only ever apply to Overview's Details and to Logs/Report Builder — Summary is a
-  // fixed 30-day snapshot, so the filter bar has nothing to do there and stays hidden.
-  const showToolbar = tab !== 'overview' || overviewSubTab === 'details';
+  // fixed 30-day snapshot and Provider Health always reads the full dataset, so the filter
+  // bar has nothing to do on either and stays hidden.
+  const showToolbar =
+    tab === 'logs' || tab === 'pivot' || (tab === 'overview' && overviewSubTab === 'details');
 
   const handleFiltersChange = (next: LogsFilters) => {
     setFilters(next);
@@ -172,6 +186,7 @@ export default function App() {
       {tab === 'overview' && overviewSubTab === 'details' && (
         <DetailsPanel filters={filters} active />
       )}
+      {tab === 'provider-health' && <ProviderHealthPanel />}
 
       <RowDetailDrawer logId={selectedLogId} onClose={() => setSelectedLogId(null)} />
     </div>
