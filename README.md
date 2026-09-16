@@ -2,14 +2,23 @@
 
 ![AiFinOps Dashboard Demo](assets/screenshots/v1_1_0_demo.gif)
 
-AiFinOps is a self-hosted, OpenAI-compatible **LLM gateway built for cost governance**. Every
-call your team makes to an LLM — provider, model, tokens, cost — passes through one audited
-front door, gated by an allow-list you control, before it ever reaches a provider.
+![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=flat-square&logo=openai&logoColor=white)
+![Anthropic](https://img.shields.io/badge/Anthropic-D97757?style=flat-square&logo=anthropic&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-000000?style=flat-square&logo=ollama&logoColor=white)
+![OpenRouter](https://img.shields.io/badge/OpenRouter-6467F2?style=flat-square&logo=openrouter&logoColor=white)
 
-Unlike calling a provider SDK directly, nothing goes out that wasn't explicitly approved, no
-credential ever leaves the gateway, and every call is written to Postgres before the response
-even comes back — so you have a permanent, queryable spend record from day one, not a project
-you have to bolt on after the first surprising invoice.
+AiFinOps is an open-source **audit, compliance, and financial governance layer for multi-provider
+AI usage** — helping teams answer _who's responsible_ for what happens with AI, not just what it
+costs. It gives teams a single point of control to attribute spend, enforce budget and usage
+policy, and maintain a compliance-grade audit trail (SOC 2 / EU AI Act mapping on the roadmap)
+across every LLM provider they use.
+
+Every call your team makes to an LLM — provider, model, tokens, cost, and who's accountable for
+it — passes through one audited front door, gated by an allow-list you control, before it ever
+reaches a provider. Nothing goes out that wasn't explicitly approved, no credential ever leaves
+the gateway, and every call is written to Postgres before the response even comes back — so you
+have a permanent, queryable governance record from day one, not a project you have to bolt on
+after the first surprising invoice or the first audit request.
 
 ## 📊 Why AiFinOps
 
@@ -20,10 +29,11 @@ Sound familiar?
 - "How much of that spend is going to calls that failed anyway?"
 - "Could we be paying less for the same task on a different model?"
 - "Is anyone calling a model we never approved?"
+- "If an auditor asked who ran what through AI last quarter, could we show them?"
 
-If your team can't answer these today, you're one invoice away from an uncomfortable
-conversation. AiFinOps exists so you can answer them before your VP or CFO asks — with
-**preventive** controls, not just after-the-fact reporting:
+If your team can't answer these today, you're one invoice — or one audit request — away from an
+uncomfortable conversation. AiFinOps exists so you can answer them before your VP, CFO, or
+compliance officer asks — with **preventive** controls, not just after-the-fact reporting:
 
 - **Nothing gets called unless it's explicitly provisioned.** A request for a model that isn't
   on your allow-list is rejected with a `400` before it ever reaches the provider.
