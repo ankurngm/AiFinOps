@@ -197,4 +197,4 @@ to [github.com/ankurngm/AiFinOps](https://github.com/ankurngm/AiFinOps).
 
 ## Author
 
-Created by [Ankur Nigam](https://www.linkedin.com/in/ankurnigam/).
+Created by Ankur Nigam.
